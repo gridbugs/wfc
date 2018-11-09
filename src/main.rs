@@ -1,7 +1,7 @@
 extern crate image;
 
 mod coord {
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct Coord {
         pub x: i32,
         pub y: i32,
@@ -14,6 +14,9 @@ mod coord {
     }
 
     impl Coord {
+        pub fn new(x: i32, y: i32) -> Self {
+            Self { x, y }
+        }
         fn normalize_part(value: i32, size: u32) -> i32 {
             let value = (value % size as i32);
             if value < 0 {
@@ -31,6 +34,9 @@ mod coord {
     }
 
     impl Size {
+        pub fn new(width: u32, height: u32) -> Self {
+            Self { width, height }
+        }
         pub fn count(self) -> usize {
             (self.width * self.height) as usize
         }
@@ -58,8 +64,9 @@ mod grid {
         coord.x as usize + coord.y as usize * width as usize
     }
 
-    fn coord_is_valid(coord: Coord, width: u32) -> bool {
-        coord.x >= 0 && coord.y >= 0 && coord.x < width as i32
+    fn coord_is_valid(coord: Coord, size: Size) -> bool {
+        coord.x >= 0 && coord.y >= 0 && coord.x < size.width as i32
+            && coord.y < size.height as i32
     }
 
     pub type GridIter<'a, T> = ::std::slice::Iter<'a, T>;
@@ -117,7 +124,7 @@ mod grid {
                 .get(valid_coord_to_index(coord, self.size.width))
         }
         pub fn get(&self, coord: Coord) -> Option<&T> {
-            if coord_is_valid(coord, self.size.width) {
+            if coord_is_valid(coord, self.size) {
                 self.get_valid_coord(coord)
             } else {
                 None
@@ -147,33 +154,57 @@ mod grid {
                 coord_iter: self.coord_iter(),
             }
         }
+        pub fn tiled(&self) -> TiledGrid<T> {
+            TiledGrid { grid: self }
+        }
     }
 
-    pub struct GridSlice<'a, T: 'a> {
+    pub struct TiledGrid<'a, T: 'a> {
         grid: &'a Grid<T>,
+    }
+
+    impl<'a, T> TiledGrid<'a, T> {
+        pub fn get(&self, coord: Coord) -> &T {
+            let coord = coord.normalize(self.grid.size);
+            let width = self.grid.size.width;
+            &self.grid.cells[valid_coord_to_index(coord, width)]
+        }
+        pub fn slice(&self, top_left: Coord, size: Size) -> TiledGridSlice<T> {
+            TiledGridSlice {
+                grid: self,
+                top_left,
+                size,
+            }
+        }
+    }
+
+    pub struct TiledGridSlice<'a, T: 'a> {
+        grid: &'a TiledGrid<'a, T>,
         top_left: Coord,
         size: Size,
     }
 
-    impl<'a, T> GridSlice<'a, T> {
+    impl<'a, T> TiledGridSlice<'a, T> {
         pub fn get(&self, coord: Coord) -> Option<&T> {
-            if coord_is_valid(coord, self.size.width) {
-                self.grid.get_valid_coord(self.top_left + coord)
+            if coord_is_valid(coord, self.size) {
+                Some(self.grid.get(self.top_left + coord))
             } else {
                 None
             }
         }
     }
 
-    pub struct TiledGrid<T> {
-        grid: Grid<T>,
-    }
-
-    impl<T> TiledGrid<T> {
-        pub fn get(&self, coord: Coord) -> &T {
-            let coord = coord.normalize(self.grid.size);
-            let width = self.grid.size.width;
-            &self.grid.cells[valid_coord_to_index(coord, width)]
+    #[cfg(test)]
+    mod tests {
+        use super::Grid;
+        use coord::{Coord, Size};
+        #[test]
+        fn tiling() {
+            let grid = Grid::from_fn(Size::new(4, 4), |coord| coord);
+            let tiled = grid.tiled();
+            let slice = tiled.slice(Coord::new(-1, -1), Size::new(2, 2));
+            let value = *slice.get(Coord::new(0, 1)).unwrap();
+            assert_eq!(value, Coord::new(3, 0));
         }
     }
 }
@@ -216,34 +247,13 @@ mod pattern {
     }
 }
 
-mod compatibility {
-    use direction::{Direction, DirectionTable};
-    use pattern::{PatternId, PatternTable};
-    struct CompatibilityTable {
-        table: PatternTable<DirectionTable<Vec<PatternId>>>,
-    }
-
-    impl CompatibilityTable {
-        pub fn compatibile_patterns(
-            &self,
-            pattern_id: PatternId,
-            direction: Direction,
-        ) -> Option<::std::slice::Iter<PatternId>> {
-            self.table
-                .get(pattern_id)
-                .map(|direction_table| direction_table.get(direction).iter())
-        }
-    }
-
-}
-
 mod image_grid {
     use coord::{Coord, Size};
     use grid::Grid;
     use image::{DynamicImage, Rgb, RgbImage};
 
     #[derive(Clone, Copy)]
-    struct Colour {
+    pub struct Colour {
         r: u8,
         g: u8,
         b: u8,
@@ -281,6 +291,31 @@ mod image_grid {
                 rgb_image.put_pixel(x as u32, y as u32, colour.to_rgb());
             }
             DynamicImage::ImageRgb8(rgb_image)
+        }
+    }
+}
+
+mod compatibility {
+    use direction::{Direction, DirectionTable};
+    use grid::Grid;
+    use image_grid::Colour;
+    use pattern::{PatternId, PatternTable};
+    struct CompatibilityTable {
+        table: PatternTable<DirectionTable<Vec<PatternId>>>,
+    }
+
+    impl CompatibilityTable {
+        pub fn compatibile_patterns(
+            &self,
+            pattern_id: PatternId,
+            direction: Direction,
+        ) -> Option<::std::slice::Iter<PatternId>> {
+            self.table
+                .get(pattern_id)
+                .map(|direction_table| direction_table.get(direction).iter())
+        }
+        pub fn from_grid_tiling(grid: &Grid<Colour>) -> Self {
+            unimplemented!()
         }
     }
 }
