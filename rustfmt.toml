@@ -1,0 +1,5 @@
+max_width = 90
+reorder_imports = true
+reorder_modules = true
+format_strings = true
+error_on_line_overflow = false

@@ -1,0 +1,7 @@
+[package]
+name = "wfc"
+version = "0.1.0"
+authors = ["Stephen Sherratt <sfsherratt@gmail.com>"]
+
+[dependencies]
+image = "0.20"
