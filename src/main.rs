@@ -94,7 +94,7 @@ mod grid {
         }
     }
 
-    pub struct Enumerate<'a, T> {
+    pub struct Enumerate<'a, T: 'a> {
         grid_iter: GridIter<'a, T>,
         coord_iter: CoordIter,
     }
@@ -113,7 +113,8 @@ mod grid {
             self.size
         }
         fn get_valid_coord(&self, coord: Coord) -> Option<&T> {
-            self.cells.get(valid_coord_to_index(coord, self.size.width))
+            self.cells
+                .get(valid_coord_to_index(coord, self.size.width))
         }
         pub fn get(&self, coord: Coord) -> Option<&T> {
             if coord_is_valid(coord, self.size.width) {
@@ -148,7 +149,7 @@ mod grid {
         }
     }
 
-    pub struct GridSlice<'a, T> {
+    pub struct GridSlice<'a, T: 'a> {
         grid: &'a Grid<T>,
         top_left: Coord,
         size: Size,
@@ -267,9 +268,10 @@ mod image_grid {
                 width: rgb_image.width(),
                 height: rgb_image.height(),
             };
-            let grid = Grid::from_fn(size, |Coord { x, y }| {
-                Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32))
-            });
+            let grid = Grid::from_fn(
+                size,
+                |Coord { x, y }| Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32)),
+            );
             Self { grid }
         }
         pub fn to_image(&self) -> DynamicImage {
