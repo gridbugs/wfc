@@ -18,7 +18,7 @@ mod coord {
             Self { x, y }
         }
         fn normalize_part(value: i32, size: u32) -> i32 {
-            let value = (value % size as i32);
+            let value = value % size as i32;
             if value < 0 {
                 value + size as i32
             } else {
@@ -190,10 +190,26 @@ mod grid {
         }
     }
 
+    #[derive(Clone)]
     pub struct TiledGridSlice<'a, T: 'a> {
         grid: &'a Grid<T>,
         top_left: Coord,
         size: Size,
+    }
+
+    pub struct TiledGridSliceIter<'a, T: 'a> {
+        grid: &'a Grid<T>,
+        coord_iter: CoordIter,
+        top_left: Coord,
+    }
+
+    impl<'a, T> Iterator for TiledGridSliceIter<'a, T> {
+        type Item = &'a T;
+        fn next(&mut self) -> Option<Self::Item> {
+            self.coord_iter
+                .next()
+                .map(|coord| self.grid.tiled_get(self.top_left + coord))
+        }
     }
 
     impl<'a, T> TiledGridSlice<'a, T> {
@@ -204,10 +220,17 @@ mod grid {
                 None
             }
         }
+        pub fn iter(&self) -> TiledGridSliceIter<T> {
+            TiledGridSliceIter {
+                grid: self.grid,
+                top_left: self.top_left,
+                coord_iter: CoordIter::new(self.size),
+            }
+        }
     }
 
     #[cfg(test)]
-    mod tests {
+    mod test {
         use super::Grid;
         use coord::{Coord, Size};
         #[test]
@@ -287,7 +310,7 @@ mod pattern {
         b: Coord,
         b_offset_direction: Direction,
         pattern_size: Size,
-        grid: Grid<Colour>,
+        grid: &Grid<Colour>,
     ) -> bool {
         let (overlap_size_to_sub, a_offset, b_offset) = match b_offset_direction {
             Direction::North => (Size::new(0, 1), Coord::new(0, 0), Coord::new(0, 1)),
@@ -300,7 +323,54 @@ mod pattern {
         let b_overlap = b + b_offset;
         let a_slice = grid.tiled_slice(a_overlap, overlap_size);
         let b_slice = grid.tiled_slice(b_overlap, overlap_size);
-        true
+        a_slice.iter().zip(b_slice.iter()).all(|(a, b)| a == b)
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+        use coord::{Coord, Size};
+        use direction::Direction;
+        use grid::Grid;
+        use image_grid::Colour;
+        #[test]
+        fn compatibile_patterns() {
+            let r = Colour { r: 255, g: 0, b: 0 };
+            let b = Colour { r: 0, g: 0, b: 255 };
+            let array = [[r, b, b], [b, r, b]];
+            let grid = Grid::from_fn(Size::new(3, 2), |coord| {
+                array[coord.y as usize][coord.x as usize]
+            });
+            let pattern_size = Size::new(2, 2);
+            assert!(are_patterns_compatible(
+                Coord::new(0, 0),
+                Coord::new(1, 0),
+                Direction::East,
+                pattern_size,
+                &grid,
+            ));
+            assert!(are_patterns_compatible(
+                Coord::new(0, 0),
+                Coord::new(1, 0),
+                Direction::North,
+                pattern_size,
+                &grid,
+            ));
+            assert!(!are_patterns_compatible(
+                Coord::new(0, 0),
+                Coord::new(1, 0),
+                Direction::South,
+                pattern_size,
+                &grid,
+            ));
+            assert!(!are_patterns_compatible(
+                Coord::new(0, 0),
+                Coord::new(1, 0),
+                Direction::West,
+                pattern_size,
+                &grid,
+            ));
+        }
     }
 }
 
@@ -309,11 +379,11 @@ mod image_grid {
     use grid::Grid;
     use image::{DynamicImage, Rgb, RgbImage};
 
-    #[derive(Clone, Copy, PartialEq, Eq)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct Colour {
-        r: u8,
-        g: u8,
-        b: u8,
+        pub r: u8,
+        pub g: u8,
+        pub b: u8,
     }
     impl Colour {
         fn from_rgb(Rgb { data: [r, g, b] }: Rgb<u8>) -> Self {
