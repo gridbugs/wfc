@@ -9,8 +9,8 @@ mod coord {
 
     #[derive(Debug, Clone, Copy)]
     pub struct Size {
-        pub width: u32,
-        pub height: u32,
+        width: u32,
+        height: u32,
     }
 
     impl Coord {
@@ -37,6 +37,12 @@ mod coord {
         pub fn new(width: u32, height: u32) -> Self {
             Self { width, height }
         }
+        pub fn width(self) -> u32 {
+            self.width
+        }
+        pub fn height(self) -> u32 {
+            self.height
+        }
         pub fn count(self) -> usize {
             (self.width * self.height) as usize
         }
@@ -51,6 +57,20 @@ mod coord {
             }
         }
     }
+
+    impl ::std::ops::Sub for Size {
+        type Output = Size;
+        fn sub(self, other: Self) -> Self::Output {
+            if self.width() <= other.width() {
+                panic!()
+            }
+            if self.height() <= other.height() {
+                panic!()
+            }
+            Size::new(self.width() - other.width(), self.height() - other.height())
+        }
+    }
+
 }
 
 mod grid {
@@ -65,19 +85,21 @@ mod grid {
     }
 
     fn coord_is_valid(coord: Coord, size: Size) -> bool {
-        coord.x >= 0 && coord.y >= 0 && coord.x < size.width as i32
-            && coord.y < size.height as i32
+        coord.x >= 0
+            && coord.y >= 0
+            && coord.x < size.width() as i32
+            && coord.y < size.height() as i32
     }
 
     pub type GridIter<'a, T> = ::std::slice::Iter<'a, T>;
 
-    struct CoordIter {
+    pub struct CoordIter {
         coord: Coord,
         size: Size,
     }
 
     impl CoordIter {
-        fn new(size: Size) -> Self {
+        pub fn new(size: Size) -> Self {
             Self {
                 size,
                 coord: Coord { x: 0, y: 0 },
@@ -88,12 +110,12 @@ mod grid {
     impl Iterator for CoordIter {
         type Item = Coord;
         fn next(&mut self) -> Option<Self::Item> {
-            if self.coord.y == self.size.height as i32 {
+            if self.coord.y == self.size.height() as i32 {
                 return None;
             }
             let coord = self.coord;
             self.coord.x += 1;
-            if self.coord.x == self.size.width as i32 {
+            if self.coord.x == self.size.width() as i32 {
                 self.coord.x = 0;
                 self.coord.y += 1;
             }
@@ -121,7 +143,7 @@ mod grid {
         }
         fn get_valid_coord(&self, coord: Coord) -> Option<&T> {
             self.cells
-                .get(valid_coord_to_index(coord, self.size.width))
+                .get(valid_coord_to_index(coord, self.size.width()))
         }
         pub fn get(&self, coord: Coord) -> Option<&T> {
             if coord_is_valid(coord, self.size) {
@@ -154,22 +176,12 @@ mod grid {
                 coord_iter: self.coord_iter(),
             }
         }
-        pub fn tiled(&self) -> TiledGrid<T> {
-            TiledGrid { grid: self }
+        pub fn tiled_get(&self, coord: Coord) -> &T {
+            let coord = coord.normalize(self.size);
+            let width = self.size.width();
+            &self.cells[valid_coord_to_index(coord, width)]
         }
-    }
-
-    pub struct TiledGrid<'a, T: 'a> {
-        grid: &'a Grid<T>,
-    }
-
-    impl<'a, T> TiledGrid<'a, T> {
-        pub fn get(&self, coord: Coord) -> &T {
-            let coord = coord.normalize(self.grid.size);
-            let width = self.grid.size.width;
-            &self.grid.cells[valid_coord_to_index(coord, width)]
-        }
-        pub fn slice(&self, top_left: Coord, size: Size) -> TiledGridSlice<T> {
+        pub fn tiled_slice(&self, top_left: Coord, size: Size) -> TiledGridSlice<T> {
             TiledGridSlice {
                 grid: self,
                 top_left,
@@ -179,7 +191,7 @@ mod grid {
     }
 
     pub struct TiledGridSlice<'a, T: 'a> {
-        grid: &'a TiledGrid<'a, T>,
+        grid: &'a Grid<T>,
         top_left: Coord,
         size: Size,
     }
@@ -187,7 +199,7 @@ mod grid {
     impl<'a, T> TiledGridSlice<'a, T> {
         pub fn get(&self, coord: Coord) -> Option<&T> {
             if coord_is_valid(coord, self.size) {
-                Some(self.grid.get(self.top_left + coord))
+                Some(self.grid.tiled_get(self.top_left + coord))
             } else {
                 None
             }
@@ -201,8 +213,7 @@ mod grid {
         #[test]
         fn tiling() {
             let grid = Grid::from_fn(Size::new(4, 4), |coord| coord);
-            let tiled = grid.tiled();
-            let slice = tiled.slice(Coord::new(-1, -1), Size::new(2, 2));
+            let slice = grid.tiled_slice(Coord::new(-1, -1), Size::new(2, 2));
             let value = *slice.get(Coord::new(0, 1)).unwrap();
             assert_eq!(value, Coord::new(3, 0));
         }
@@ -210,12 +221,23 @@ mod grid {
 }
 
 mod direction {
+    use coord::Coord;
     #[derive(Clone, Copy)]
     pub enum Direction {
         North,
         East,
         South,
         West,
+    }
+    impl Direction {
+        pub fn coord(self) -> Coord {
+            match self {
+                Direction::North => Coord::new(0, -1),
+                Direction::East => Coord::new(1, 0),
+                Direction::South => Coord::new(0, 1),
+                Direction::West => Coord::new(-1, 0),
+            }
+        }
     }
     pub struct DirectionTable<T> {
         values: [T; 4],
@@ -229,9 +251,17 @@ mod direction {
 
 mod pattern {
     use coord::{Coord, Size};
+    use direction::Direction;
+    use grid::{CoordIter, Grid};
+    use image_grid::Colour;
     pub type PatternId = u16;
+    pub const MAX_PATTERN_ID: PatternId = ::std::u16::MAX;
     pub struct PatternTable<T> {
         data: Vec<T>,
+    }
+    pub struct Pattern {
+        top_left: Coord,
+        size: Size,
     }
     impl<T: Default + Clone> PatternTable<T> {
         pub fn new(size: usize) -> Self {
@@ -245,6 +275,33 @@ mod pattern {
             self.data.get(pattern_id as usize)
         }
     }
+
+    pub fn pattern_coords(grid_size: Size, pattern_size: Size) -> PatternTable<Coord> {
+        PatternTable {
+            data: CoordIter::new(grid_size).collect(),
+        }
+    }
+
+    pub fn are_patterns_compatible(
+        a: Coord,
+        b: Coord,
+        b_offset_direction: Direction,
+        pattern_size: Size,
+        grid: Grid<Colour>,
+    ) -> bool {
+        let (overlap_size_to_sub, a_offset, b_offset) = match b_offset_direction {
+            Direction::North => (Size::new(0, 1), Coord::new(0, 0), Coord::new(0, 1)),
+            Direction::South => (Size::new(0, 1), Coord::new(0, 1), Coord::new(0, 0)),
+            Direction::East => (Size::new(1, 0), Coord::new(1, 0), Coord::new(0, 0)),
+            Direction::West => (Size::new(1, 0), Coord::new(0, 0), Coord::new(1, 0)),
+        };
+        let overlap_size = pattern_size - overlap_size_to_sub;
+        let a_overlap = a + a_offset;
+        let b_overlap = b + b_offset;
+        let a_slice = grid.tiled_slice(a_overlap, overlap_size);
+        let b_slice = grid.tiled_slice(b_overlap, overlap_size);
+        true
+    }
 }
 
 mod image_grid {
@@ -252,7 +309,7 @@ mod image_grid {
     use grid::Grid;
     use image::{DynamicImage, Rgb, RgbImage};
 
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, PartialEq, Eq)]
     pub struct Colour {
         r: u8,
         g: u8,
@@ -274,19 +331,15 @@ mod image_grid {
     impl ImageGrid {
         pub fn from_image(image: &DynamicImage) -> Self {
             let rgb_image = image.to_rgb();
-            let size = Size {
-                width: rgb_image.width(),
-                height: rgb_image.height(),
-            };
-            let grid = Grid::from_fn(
-                size,
-                |Coord { x, y }| Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32)),
-            );
+            let size = Size::new(rgb_image.width(), rgb_image.height());
+            let grid = Grid::from_fn(size, |Coord { x, y }| {
+                Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32))
+            });
             Self { grid }
         }
         pub fn to_image(&self) -> DynamicImage {
             let size = self.grid.size();
-            let mut rgb_image = RgbImage::new(size.width, size.height);
+            let mut rgb_image = RgbImage::new(size.width(), size.height());
             for (Coord { x, y }, colour) in self.grid.enumerate() {
                 rgb_image.put_pixel(x as u32, y as u32, colour.to_rgb());
             }
