@@ -7,7 +7,7 @@ mod coord {
         pub y: i32,
     }
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct Size {
         width: u32,
         height: u32,
@@ -67,7 +67,10 @@ mod coord {
             if self.height() <= other.height() {
                 panic!()
             }
-            Size::new(self.width() - other.width(), self.height() - other.height())
+            Size::new(
+                self.width() - other.width(),
+                self.height() - other.height(),
+            )
         }
     }
 
@@ -75,6 +78,7 @@ mod coord {
 
 mod grid {
     use coord::{Coord, Size};
+    use std::hash::{Hash, Hasher};
     pub struct Grid<T> {
         size: Size,
         cells: Vec<T>,
@@ -85,9 +89,7 @@ mod grid {
     }
 
     fn coord_is_valid(coord: Coord, size: Size) -> bool {
-        coord.x >= 0
-            && coord.y >= 0
-            && coord.x < size.width() as i32
+        coord.x >= 0 && coord.y >= 0 && coord.x < size.width() as i32
             && coord.y < size.height() as i32
     }
 
@@ -145,6 +147,11 @@ mod grid {
             self.cells
                 .get(valid_coord_to_index(coord, self.size.width()))
         }
+        fn get_valid_coord_mut(&mut self, coord: Coord) -> Option<&mut T> {
+            self.cells
+                .get_mut(valid_coord_to_index(coord, self.size.width()))
+        }
+
         pub fn get(&self, coord: Coord) -> Option<&T> {
             if coord_is_valid(coord, self.size) {
                 self.get_valid_coord(coord)
@@ -152,6 +159,14 @@ mod grid {
                 None
             }
         }
+        pub fn get_mut(&mut self, coord: Coord) -> Option<&mut T> {
+            if coord_is_valid(coord, self.size) {
+                self.get_valid_coord_mut(coord)
+            } else {
+                None
+            }
+        }
+
         pub fn from_fn<F>(size: Size, f: F) -> Self
         where
             F: Fn(Coord) -> T,
@@ -229,16 +244,46 @@ mod grid {
         }
     }
 
+    impl<'a, T: Hash> Hash for TiledGridSlice<'a, T> {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            for value in self.iter() {
+                value.hash(state);
+            }
+        }
+    }
+
+    impl<'a, T: PartialEq> PartialEq for TiledGridSlice<'a, T> {
+        fn eq(&self, other: &Self) -> bool {
+            self.size == other.size && self.iter().zip(other.iter()).all(|(s, o)| s.eq(o))
+        }
+    }
+    impl<'a, T: Eq> Eq for TiledGridSlice<'a, T> {}
+
     #[cfg(test)]
     mod test {
         use super::Grid;
         use coord::{Coord, Size};
+        use std::collections::HashSet;
         #[test]
         fn tiling() {
             let grid = Grid::from_fn(Size::new(4, 4), |coord| coord);
             let slice = grid.tiled_slice(Coord::new(-1, -1), Size::new(2, 2));
             let value = *slice.get(Coord::new(0, 1)).unwrap();
             assert_eq!(value, Coord::new(3, 0));
+        }
+        #[test]
+        fn tiled_grid_slice_hash() {
+            let mut grid = Grid::from_fn(Size::new(4, 4), |_| 0);
+            *grid.get_mut(Coord::new(3, 3)).unwrap() = 1;
+            let size = Size::new(2, 2);
+            let a = grid.tiled_slice(Coord::new(0, 0), size);
+            let b = grid.tiled_slice(Coord::new(2, 2), size);
+            let c = grid.tiled_slice(Coord::new(0, 2), size);
+            let mut set = HashSet::new();
+            set.insert(a);
+            set.insert(b);
+            set.insert(c);
+            assert_eq!(set.len(), 2);
         }
     }
 }
@@ -262,6 +307,7 @@ mod direction {
             }
         }
     }
+    #[derive(Default)]
     pub struct DirectionTable<T> {
         values: [T; 4],
     }
@@ -279,31 +325,6 @@ mod pattern {
     use image_grid::Colour;
     pub type PatternId = u16;
     pub const MAX_PATTERN_ID: PatternId = ::std::u16::MAX;
-    pub struct PatternTable<T> {
-        data: Vec<T>,
-    }
-    pub struct Pattern {
-        top_left: Coord,
-        size: Size,
-    }
-    impl<T: Default + Clone> PatternTable<T> {
-        pub fn new(size: usize) -> Self {
-            let mut data = Vec::with_capacity(size);
-            data.resize(size, Default::default());
-            Self { data }
-        }
-    }
-    impl<T> PatternTable<T> {
-        pub fn get(&self, pattern_id: PatternId) -> Option<&T> {
-            self.data.get(pattern_id as usize)
-        }
-    }
-
-    pub fn pattern_coords(grid_size: Size, pattern_size: Size) -> PatternTable<Coord> {
-        PatternTable {
-            data: CoordIter::new(grid_size).collect(),
-        }
-    }
 
     pub fn are_patterns_compatible(
         a: Coord,
@@ -323,7 +344,10 @@ mod pattern {
         let b_overlap = b + b_offset;
         let a_slice = grid.tiled_slice(a_overlap, overlap_size);
         let b_slice = grid.tiled_slice(b_overlap, overlap_size);
-        a_slice.iter().zip(b_slice.iter()).all(|(a, b)| a == b)
+        a_slice
+            .iter()
+            .zip(b_slice.iter())
+            .all(|(a, b)| a == b)
     }
 
     #[cfg(test)]
@@ -335,8 +359,16 @@ mod pattern {
         use image_grid::Colour;
         #[test]
         fn compatibile_patterns() {
-            let r = Colour { r: 255, g: 0, b: 0 };
-            let b = Colour { r: 0, g: 0, b: 255 };
+            let r = Colour {
+                r: 255,
+                g: 0,
+                b: 0,
+            };
+            let b = Colour {
+                r: 0,
+                g: 0,
+                b: 255,
+            };
             let array = [[r, b, b], [b, r, b]];
             let grid = Grid::from_fn(Size::new(3, 2), |coord| {
                 array[coord.y as usize][coord.x as usize]
@@ -402,9 +434,10 @@ mod image_grid {
         pub fn from_image(image: &DynamicImage) -> Self {
             let rgb_image = image.to_rgb();
             let size = Size::new(rgb_image.width(), rgb_image.height());
-            let grid = Grid::from_fn(size, |Coord { x, y }| {
-                Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32))
-            });
+            let grid = Grid::from_fn(
+                size,
+                |Coord { x, y }| Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32)),
+            );
             Self { grid }
         }
         pub fn to_image(&self) -> DynamicImage {
@@ -419,12 +452,13 @@ mod image_grid {
 }
 
 mod compatibility {
+    use coord::Size;
     use direction::{Direction, DirectionTable};
     use grid::Grid;
     use image_grid::Colour;
-    use pattern::{PatternId, PatternTable};
+    use pattern::{self, PatternId};
     struct CompatibilityTable {
-        table: PatternTable<DirectionTable<Vec<PatternId>>>,
+        table: Vec<DirectionTable<Vec<PatternId>>>,
     }
 
     impl CompatibilityTable {
@@ -432,12 +466,10 @@ mod compatibility {
             &self,
             pattern_id: PatternId,
             direction: Direction,
-        ) -> Option<::std::slice::Iter<PatternId>> {
-            self.table
-                .get(pattern_id)
-                .map(|direction_table| direction_table.get(direction).iter())
+        ) -> ::std::slice::Iter<PatternId> {
+            self.table[pattern_id as usize].get(direction).iter()
         }
-        pub fn from_grid_tiling(grid: &Grid<Colour>) -> Self {
+        pub fn from_grid_tiling(pattern_size: Size, grid: &Grid<Colour>) -> Self {
             unimplemented!()
         }
     }
