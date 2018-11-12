@@ -1,7 +1,7 @@
 extern crate image;
 
 mod coord {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub struct Coord {
         pub x: i32,
         pub y: i32,
@@ -67,10 +67,7 @@ mod coord {
             if self.height() <= other.height() {
                 panic!()
             }
-            Size::new(
-                self.width() - other.width(),
-                self.height() - other.height(),
-            )
+            Size::new(self.width() - other.width(), self.height() - other.height())
         }
     }
 
@@ -89,7 +86,9 @@ mod grid {
     }
 
     fn coord_is_valid(coord: Coord, size: Size) -> bool {
-        coord.x >= 0 && coord.y >= 0 && coord.x < size.width() as i32
+        coord.x >= 0
+            && coord.y >= 0
+            && coord.x < size.width() as i32
             && coord.y < size.height() as i32
     }
 
@@ -228,6 +227,9 @@ mod grid {
     }
 
     impl<'a, T> TiledGridSlice<'a, T> {
+        pub fn top_left(&self) -> Coord {
+            self.top_left
+        }
         pub fn get(&self, coord: Coord) -> Option<&T> {
             if coord_is_valid(coord, self.size) {
                 Some(self.grid.tiled_get(self.top_left + coord))
@@ -344,10 +346,7 @@ mod pattern {
         let b_overlap = b + b_offset;
         let a_slice = grid.tiled_slice(a_overlap, overlap_size);
         let b_slice = grid.tiled_slice(b_overlap, overlap_size);
-        a_slice
-            .iter()
-            .zip(b_slice.iter())
-            .all(|(a, b)| a == b)
+        a_slice.iter().zip(b_slice.iter()).all(|(a, b)| a == b)
     }
 
     #[cfg(test)]
@@ -359,16 +358,8 @@ mod pattern {
         use image_grid::Colour;
         #[test]
         fn compatibile_patterns() {
-            let r = Colour {
-                r: 255,
-                g: 0,
-                b: 0,
-            };
-            let b = Colour {
-                r: 0,
-                g: 0,
-                b: 255,
-            };
+            let r = Colour { r: 255, g: 0, b: 0 };
+            let b = Colour { r: 0, g: 0, b: 255 };
             let array = [[r, b, b], [b, r, b]];
             let grid = Grid::from_fn(Size::new(3, 2), |coord| {
                 array[coord.y as usize][coord.x as usize]
@@ -408,10 +399,10 @@ mod pattern {
 
 mod image_grid {
     use coord::{Coord, Size};
-    use grid::Grid;
+    use grid::{CoordIter, Grid, TiledGridSlice};
     use image::{DynamicImage, Rgb, RgbImage};
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct Colour {
         pub r: u8,
         pub g: u8,
@@ -430,14 +421,26 @@ mod image_grid {
     pub struct ImageGrid {
         grid: Grid<Colour>,
     }
+    pub struct PatternIter<'a> {
+        grid: &'a Grid<Colour>,
+        pattern_size: Size,
+        coord_iter: CoordIter,
+    }
+    impl<'a> Iterator for PatternIter<'a> {
+        type Item = TiledGridSlice<'a, Colour>;
+        fn next(&mut self) -> Option<Self::Item> {
+            self.coord_iter
+                .next()
+                .map(|coord| self.grid.tiled_slice(coord, self.pattern_size))
+        }
+    }
     impl ImageGrid {
         pub fn from_image(image: &DynamicImage) -> Self {
             let rgb_image = image.to_rgb();
             let size = Size::new(rgb_image.width(), rgb_image.height());
-            let grid = Grid::from_fn(
-                size,
-                |Coord { x, y }| Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32)),
-            );
+            let grid = Grid::from_fn(size, |Coord { x, y }| {
+                Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32))
+            });
             Self { grid }
         }
         pub fn to_image(&self) -> DynamicImage {
@@ -447,6 +450,13 @@ mod image_grid {
                 rgb_image.put_pixel(x as u32, y as u32, colour.to_rgb());
             }
             DynamicImage::ImageRgb8(rgb_image)
+        }
+        pub fn patterns(&self, pattern_size: Size) -> PatternIter {
+            PatternIter {
+                grid: &self.grid,
+                pattern_size,
+                coord_iter: CoordIter::new(self.grid.size()),
+            }
         }
     }
 }
@@ -475,8 +485,31 @@ mod compatibility {
     }
 }
 
+use coord::{Coord, Size};
+use std::collections::HashMap;
+
+#[derive(Debug)]
+struct PatternInfo {
+    example_coord: Coord,
+    count: usize,
+}
+
 fn main() {
     let image = image::load_from_memory(include_bytes!("rooms.png")).unwrap();
     let image_grid = image_grid::ImageGrid::from_image(&image);
     image_grid.to_image().save("/tmp/a.png").unwrap();
+    let pattern_size = Size::new(3, 3);
+    let mut pattern_table = HashMap::new();
+    for pattern in image_grid.patterns(pattern_size) {
+        let info = pattern_table
+            .entry(pattern.clone())
+            .or_insert_with(|| PatternInfo {
+                example_coord: pattern.top_left(),
+                count: 0,
+            });
+        info.count += 1;
+    }
+    let mut pattern_table = pattern_table.values().collect::<Vec<_>>();
+    pattern_table.sort_by_key(|i| i.example_coord);
+    println!("{:#?}", pattern_table);
 }
