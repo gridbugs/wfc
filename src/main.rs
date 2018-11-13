@@ -308,6 +308,14 @@ mod direction {
                 Direction::West => Coord::new(-1, 0),
             }
         }
+        pub fn opposite(self) -> Self {
+            match self {
+                Direction::North => Direction::South,
+                Direction::East => Direction::West,
+                Direction::South => Direction::North,
+                Direction::West => Direction::East,
+            }
+        }
     }
     #[derive(Debug, Default)]
     pub struct DirectionTable<T> {
@@ -515,6 +523,9 @@ impl PatternTable {
             patterns.iter().map(|p| p.count_log_count).sum();
         let initial_entropy =
             compute_entropry(sum_pattern_count as f64, sum_pattern_count_log_count);
+        let min_pattern_count = patterns.iter().map(|p| p.count).min().unwrap();
+        let max_noise_mult = min_pattern_count as f64 / sum_pattern_count as f64;
+        let max_noise = -max_noise_mult * max_noise_mult.log2() / 2.;
         Self {
             patterns,
             sum_pattern_count,
