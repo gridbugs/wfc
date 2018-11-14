@@ -5,3 +5,4 @@ authors = ["Stephen Sherratt <sfsherratt@gmail.com>"]
 
 [dependencies]
 image = "0.20"
+rand = "0.5"

@@ -1,4 +1,5 @@
 extern crate image;
+extern crate rand;
 
 mod coord {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -166,9 +167,9 @@ mod grid {
             }
         }
 
-        pub fn from_fn<F>(size: Size, f: F) -> Self
+        pub fn from_fn<F>(size: Size, mut f: F) -> Self
         where
-            F: Fn(Coord) -> T,
+            F: FnMut(Coord) -> T,
         {
             let count = size.count();
             let mut cells = Vec::with_capacity(count);
@@ -178,7 +179,7 @@ mod grid {
             assert_eq!(cells.len(), count);
             Self { cells, size }
         }
-        fn iter(&self) -> GridIter<T> {
+        pub fn iter(&self) -> GridIter<T> {
             self.cells.iter()
         }
         fn coord_iter(&self) -> CoordIter {
@@ -341,6 +342,7 @@ use coord::{Coord, Size};
 use direction::{Direction, DirectionTable};
 use grid::{CoordIter, Grid, TiledGridSlice};
 use image::{DynamicImage, Rgb, RgbImage};
+use rand::{Rng, SeedableRng, StdRng};
 use std::collections::HashMap;
 
 pub fn are_patterns_compatible(
@@ -513,9 +515,20 @@ struct PatternTable {
     sum_pattern_count: usize,
     sum_pattern_count_log_count: f64,
     initial_entropy: f64,
+    max_noise: f64,
 }
 
 impl PatternTable {
+    fn max_noise(patterns: &Vec<Pattern>) -> f64 {
+        let (min_pattern_count, sum_pattern_count) = patterns
+            .iter()
+            .fold((::std::usize::MAX, 0), |(min, sum), pat| {
+                (min.min(pat.count), sum + pat.count)
+            });
+        let max_noise_mult = min_pattern_count as f64 / sum_pattern_count as f64;
+        -max_noise_mult * max_noise_mult.log2() / 2.
+    }
+
     fn new(mut patterns: Vec<Pattern>) -> Self {
         patterns.sort_by_key(|i| i.example_coord);
         let sum_pattern_count = patterns.iter().map(|p| p.count).sum();
@@ -523,14 +536,13 @@ impl PatternTable {
             patterns.iter().map(|p| p.count_log_count).sum();
         let initial_entropy =
             compute_entropry(sum_pattern_count as f64, sum_pattern_count_log_count);
-        let min_pattern_count = patterns.iter().map(|p| p.count).min().unwrap();
-        let max_noise_mult = min_pattern_count as f64 / sum_pattern_count as f64;
-        let max_noise = -max_noise_mult * max_noise_mult.log2() / 2.;
+        let max_noise = Self::max_noise(&patterns);
         Self {
             patterns,
             sum_pattern_count,
             sum_pattern_count_log_count,
             initial_entropy,
+            max_noise,
         }
     }
 }
@@ -568,18 +580,20 @@ impl MemoizedEntropy {
 }
 
 #[derive(Debug)]
-struct Cell {
+pub struct Cell {
     possible_pattern_ids: Vec<bool>,
     memoized_entropy: MemoizedEntropy,
+    noise: f64,
 }
 
 impl Cell {
-    fn new(pattern_table: &PatternTable) -> Self {
+    fn new<R: Rng>(pattern_table: &PatternTable, rng: &mut R) -> Self {
         let possible_pattern_ids = pattern_table.patterns.iter().map(|_| true).collect();
         let memoized_entropy = MemoizedEntropy::new(pattern_table);
         Self {
             possible_pattern_ids,
             memoized_entropy,
+            noise: rng.gen_range(0., pattern_table.max_noise),
         }
     }
     fn remove_possible_pattern(
@@ -597,11 +611,41 @@ impl Cell {
             .remove_pattern(pattern.count as f64, pattern.count_log_count);
     }
     fn entropy(&self) -> f64 {
-        self.memoized_entropy.entropy
+        self.memoized_entropy.entropy + self.noise
     }
 }
 
+mod output_grid {
+    use super::Cell;
+    use grid::Grid;
+    use std::cmp::Ordering;
+
+    pub fn min_entropy_cell(grid: &Grid<Cell>) -> &Cell {
+        let first = grid.iter().next().unwrap();
+        let (_min, best) =
+            grid.iter()
+                .fold((::std::f64::MAX, first), |(min, best), cell| {
+                    let entropy = cell.entropy();
+                    if entropy < min {
+                        (entropy, cell)
+                    } else {
+                        (min, best)
+                    }
+                });
+        best
+    }
+}
+
+fn rng_from_integer_seed(seed: u64) -> StdRng {
+    let mut buf = [0; 32];
+    for i in 0..8 {
+        buf[i] = ((seed >> i) & 0xff) as u8;
+    }
+    rand::StdRng::from_seed(buf)
+}
+
 fn main() {
+    let mut rng = rng_from_integer_seed(0);
     let image = image::load_from_memory(include_bytes!("rooms.png")).unwrap();
     let image_grid = ImageGrid::from_image(&image);
     image_grid.to_image().save("/tmp/a.png").unwrap();
@@ -647,5 +691,5 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    let mut output = Grid::from_fn(output_size, |_| Cell::new(&pattern_table));
+    let mut output = Grid::from_fn(output_size, |_| Cell::new(&pattern_table, &mut rng));
 }
