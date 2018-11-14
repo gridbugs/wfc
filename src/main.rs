@@ -94,6 +94,7 @@ mod grid {
     }
 
     pub type GridIter<'a, T> = ::std::slice::Iter<'a, T>;
+    pub type GridIterMut<'a, T> = ::std::slice::IterMut<'a, T>;
 
     pub struct CoordIter {
         coord: Coord,
@@ -182,6 +183,10 @@ mod grid {
         pub fn iter(&self) -> GridIter<T> {
             self.cells.iter()
         }
+        pub fn iter_mut(&mut self) -> GridIterMut<T> {
+            self.cells.iter_mut()
+        }
+
         fn coord_iter(&self) -> CoordIter {
             CoordIter::new(self.size)
         }
@@ -343,6 +348,7 @@ use direction::{Direction, DirectionTable};
 use grid::{CoordIter, Grid, TiledGridSlice};
 use image::{DynamicImage, Rgb, RgbImage};
 use rand::{Rng, SeedableRng, StdRng};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 pub fn are_patterns_compatible(
@@ -502,12 +508,20 @@ impl Pattern {
     }
 }
 
-fn compute_entropry(
+#[derive(Debug)]
+struct NoPossiblePatterns;
+
+fn compute_entropy(
     sum_possible_pattern_count: f64,
     sum_possible_pattern_count_log_count: f64,
-) -> f64 {
-    sum_possible_pattern_count.log2()
-        - (sum_possible_pattern_count_log_count / sum_possible_pattern_count)
+) -> Result<f64, NoPossiblePatterns> {
+    assert!(sum_possible_pattern_count >= 0.);
+    if sum_possible_pattern_count == 0. {
+        Err(NoPossiblePatterns)
+    } else {
+        Ok(sum_possible_pattern_count.log2()
+            - (sum_possible_pattern_count_log_count / sum_possible_pattern_count))
+    }
 }
 
 struct PatternTable {
@@ -515,34 +529,22 @@ struct PatternTable {
     sum_pattern_count: usize,
     sum_pattern_count_log_count: f64,
     initial_entropy: f64,
-    max_noise: f64,
 }
 
 impl PatternTable {
-    fn max_noise(patterns: &Vec<Pattern>) -> f64 {
-        let (min_pattern_count, sum_pattern_count) = patterns
-            .iter()
-            .fold((::std::usize::MAX, 0), |(min, sum), pat| {
-                (min.min(pat.count), sum + pat.count)
-            });
-        let max_noise_mult = min_pattern_count as f64 / sum_pattern_count as f64;
-        -max_noise_mult * max_noise_mult.log2() / 2.
-    }
-
     fn new(mut patterns: Vec<Pattern>) -> Self {
         patterns.sort_by_key(|i| i.example_coord);
         let sum_pattern_count = patterns.iter().map(|p| p.count).sum();
         let sum_pattern_count_log_count =
             patterns.iter().map(|p| p.count_log_count).sum();
         let initial_entropy =
-            compute_entropry(sum_pattern_count as f64, sum_pattern_count_log_count);
-        let max_noise = Self::max_noise(&patterns);
+            compute_entropy(sum_pattern_count as f64, sum_pattern_count_log_count)
+                .unwrap();
         Self {
             patterns,
             sum_pattern_count,
             sum_pattern_count_log_count,
             initial_entropy,
-            max_noise,
         }
     }
 }
@@ -572,28 +574,50 @@ impl MemoizedEntropy {
     fn remove_pattern(&mut self, count: f64, count_log_count: f64) {
         self.sum_possible_pattern_count -= count;
         self.sum_possible_pattern_count_log_count -= count_log_count;
-        self.entropy = compute_entropry(
+        self.entropy = compute_entropy(
             self.sum_possible_pattern_count,
             self.sum_possible_pattern_count_log_count,
-        );
+        )
+        .unwrap();
+    }
+}
+
+#[derive(PartialEq)]
+struct EntropyWithNoise {
+    entropy: f64,
+    noise: u64,
+}
+
+impl PartialOrd for EntropyWithNoise {
+    fn partial_cmp(&self, other: &Self) -> Option<::std::cmp::Ordering> {
+        match self.entropy.partial_cmp(&other.entropy) {
+            Some(Ordering::Equal) => self.noise.partial_cmp(&other.noise),
+            other_ordering => other_ordering,
+        }
     }
 }
 
 #[derive(Debug)]
 pub struct Cell {
     possible_pattern_ids: Vec<bool>,
+    num_possible_patterns: usize,
+    sum_possible_pattern_count: usize,
     memoized_entropy: MemoizedEntropy,
-    noise: f64,
+    noise: u64,
 }
 
 impl Cell {
     fn new<R: Rng>(pattern_table: &PatternTable, rng: &mut R) -> Self {
         let possible_pattern_ids = pattern_table.patterns.iter().map(|_| true).collect();
+        let num_possible_patterns = pattern_table.patterns.len();
+        let sum_possible_pattern_count = pattern_table.sum_pattern_count;
         let memoized_entropy = MemoizedEntropy::new(pattern_table);
         Self {
             possible_pattern_ids,
             memoized_entropy,
-            noise: rng.gen_range(0., pattern_table.max_noise),
+            noise: rng.gen(),
+            num_possible_patterns,
+            sum_possible_pattern_count,
         }
     }
     fn remove_possible_pattern(
@@ -601,6 +625,7 @@ impl Cell {
         pattern_id: usize,
         pattern_table: &PatternTable,
     ) {
+        assert!(self.num_possible_patterns > 0);
         let possible_pattern_id = &mut self.possible_pattern_ids[pattern_id];
         if !*possible_pattern_id {
             return;
@@ -609,30 +634,106 @@ impl Cell {
         let pattern = &pattern_table.patterns[pattern_id];
         self.memoized_entropy
             .remove_pattern(pattern.count as f64, pattern.count_log_count);
+        self.sum_possible_pattern_count -= pattern.count;
+        self.num_possible_patterns -= 1;
     }
-    fn entropy(&self) -> f64 {
-        self.memoized_entropy.entropy + self.noise
+    fn set_single_possible_pattern(&mut self, pattern_id: usize) {
+        assert!(self.possible_pattern_ids[pattern_id]);
+        assert!(self.num_possible_patterns > 0);
+        self.possible_pattern_ids
+            .iter_mut()
+            .for_each(|p| *p = false);
+        self.possible_pattern_ids[pattern_id] = true;
+        self.num_possible_patterns = 1;
+    }
+    fn choose_pattern_id<R: Rng>(
+        &self,
+        pattern_table: &PatternTable,
+        rng: &mut R,
+    ) -> usize {
+        assert!(self.num_possible_patterns > 1);
+        let mut remaining = rng.gen_range(0, self.sum_possible_pattern_count);
+        for (pattern_id, pattern) in self
+            .possible_pattern_ids
+            .iter()
+            .zip(pattern_table.patterns.iter().enumerate())
+            .filter_map(
+                |(&is_possible, pattern)| if is_possible { Some(pattern) } else { None },
+            ) {
+            if pattern.count < remaining {
+                remaining -= pattern.count;
+            } else {
+                return pattern_id;
+            }
+        }
+        unreachable!("possible patterns inconsistent with pattern table");
+    }
+    fn is_impossible(&self) -> bool {
+        self.num_possible_patterns == 0
+    }
+    fn is_decided(&self) -> bool {
+        self.num_possible_patterns == 1
+    }
+    fn entropy_with_noise(&self) -> EntropyWithNoise {
+        assert!(self.num_possible_patterns > 1);
+        let entropy = self.memoized_entropy.entropy;
+        let noise = self.noise;
+        EntropyWithNoise { entropy, noise }
     }
 }
 
-mod output_grid {
-    use super::Cell;
-    use grid::Grid;
-    use std::cmp::Ordering;
+struct OutputGrid {
+    grid: Grid<Cell>,
+}
 
-    pub fn min_entropy_cell(grid: &Grid<Cell>) -> &Cell {
-        let first = grid.iter().next().unwrap();
-        let (_min, best) =
-            grid.iter()
-                .fold((::std::f64::MAX, first), |(min, best), cell| {
-                    let entropy = cell.entropy();
-                    if entropy < min {
-                        (entropy, cell)
-                    } else {
-                        (min, best)
-                    }
-                });
-        best
+enum NextCellChoice<'a> {
+    MinEntropyCell(&'a mut Cell),
+    Complete,
+}
+
+enum Observation {
+    Complete,
+    Incomplete,
+}
+
+impl OutputGrid {
+    fn new<R: Rng>(size: Size, pattern_table: &PatternTable, rng: &mut R) -> Self {
+        let grid = Grid::from_fn(size, |_| Cell::new(&pattern_table, rng));
+        Self { grid }
+    }
+
+    fn choose_nexnt_cell(&mut self) -> NextCellChoice {
+        match self
+            .grid
+            .iter_mut()
+            .filter(|c| !c.is_decided())
+            .min_by(|a, b| {
+                a.entropy_with_noise()
+                    .partial_cmp(&b.entropy_with_noise())
+                    .unwrap_or(Ordering::Greater)
+            }) {
+            Some(cell) => NextCellChoice::MinEntropyCell(cell),
+            None => NextCellChoice::Complete,
+        }
+    }
+
+    fn observe<R: Rng>(
+        &mut self,
+        pattern_table: &PatternTable,
+        rng: &mut R,
+    ) -> Observation {
+        let cell = match self.choose_nexnt_cell() {
+            NextCellChoice::Complete => return Observation::Complete,
+            NextCellChoice::MinEntropyCell(cell) => cell,
+        };
+        let pattern_id = cell.choose_pattern_id(pattern_table, rng);
+        cell.set_single_possible_pattern(pattern_id);
+
+        println!("{:?}", pattern_id);
+        println!("{:?}", pattern_table.patterns[pattern_id]);
+        println!("{:?}", cell);
+
+        Observation::Incomplete
     }
 }
 
@@ -691,5 +792,7 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    let mut output = Grid::from_fn(output_size, |_| Cell::new(&pattern_table, &mut rng));
+    let mut output = OutputGrid::new(output_size, &pattern_table, &mut rng);
+    output.observe(&pattern_table, &mut rng);
+    output.observe(&pattern_table, &mut rng);
 }
