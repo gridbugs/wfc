@@ -140,6 +140,20 @@ mod grid {
         }
     }
 
+    pub struct EnumerateMut<'a, T: 'a> {
+        grid_iter: GridIterMut<'a, T>,
+        coord_iter: CoordIter,
+    }
+
+    impl<'a, T> Iterator for EnumerateMut<'a, T> {
+        type Item = (Coord, &'a mut T);
+        fn next(&mut self) -> Option<Self::Item> {
+            self.coord_iter
+                .next()
+                .and_then(|coord| self.grid_iter.next().map(|value| (coord, value)))
+        }
+    }
+
     impl<T> Grid<T> {
         pub fn size(&self) -> Size {
             self.size
@@ -196,6 +210,13 @@ mod grid {
                 coord_iter: self.coord_iter(),
             }
         }
+        pub fn enumerate_mut(&mut self) -> EnumerateMut<T> {
+            EnumerateMut {
+                coord_iter: self.coord_iter(),
+                grid_iter: self.iter_mut(),
+            }
+        }
+
         pub fn tiled_get(&self, coord: Coord) -> &T {
             let coord = coord.normalize(self.size);
             let width = self.size.width();
@@ -687,7 +708,7 @@ struct OutputGrid {
 }
 
 enum NextCellChoice<'a> {
-    MinEntropyCell(&'a mut Cell),
+    MinEntropyCell { cell: &'a mut Cell, coord: Coord },
     Complete,
 }
 
@@ -702,17 +723,17 @@ impl OutputGrid {
         Self { grid }
     }
 
-    fn choose_nexnt_cell(&mut self) -> NextCellChoice {
+    fn choose_next_cell(&mut self) -> NextCellChoice {
         match self
             .grid
-            .iter_mut()
-            .filter(|c| !c.is_decided())
-            .min_by(|a, b| {
+            .enumerate_mut()
+            .filter(|(_, c)| !c.is_decided())
+            .min_by(|(_, a), (_, b)| {
                 a.entropy_with_noise()
                     .partial_cmp(&b.entropy_with_noise())
                     .unwrap_or(Ordering::Greater)
             }) {
-            Some(cell) => NextCellChoice::MinEntropyCell(cell),
+            Some((coord, cell)) => NextCellChoice::MinEntropyCell { coord, cell },
             None => NextCellChoice::Complete,
         }
     }
@@ -722,9 +743,9 @@ impl OutputGrid {
         pattern_table: &PatternTable,
         rng: &mut R,
     ) -> Observation {
-        let cell = match self.choose_nexnt_cell() {
+        let (cell, coord) = match self.choose_next_cell() {
             NextCellChoice::Complete => return Observation::Complete,
-            NextCellChoice::MinEntropyCell(cell) => cell,
+            NextCellChoice::MinEntropyCell { cell, coord } => (cell, coord),
         };
         let pattern_id = cell.choose_pattern_id(pattern_table, rng);
         cell.set_single_possible_pattern(pattern_id);
