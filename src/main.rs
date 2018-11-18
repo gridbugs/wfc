@@ -2,7 +2,8 @@ extern crate image;
 extern crate rand;
 
 mod coord {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    use std::cmp::Ordering;
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct Coord {
         pub x: i32,
         pub y: i32,
@@ -68,10 +69,27 @@ mod coord {
             if self.height() <= other.height() {
                 panic!()
             }
-            Size::new(self.width() - other.width(), self.height() - other.height())
+            Size::new(
+                self.width() - other.width(),
+                self.height() - other.height(),
+            )
         }
     }
 
+    impl PartialOrd for Coord {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+
+    impl Ord for Coord {
+        fn cmp(&self, other: &Self) -> Ordering {
+            match self.y.cmp(&other.y) {
+                Ordering::Equal => self.x.cmp(&other.x),
+                other => other,
+            }
+        }
+    }
 }
 
 mod grid {
@@ -87,9 +105,7 @@ mod grid {
     }
 
     fn coord_is_valid(coord: Coord, size: Size) -> bool {
-        coord.x >= 0
-            && coord.y >= 0
-            && coord.x < size.width() as i32
+        coord.x >= 0 && coord.y >= 0 && coord.x < size.width() as i32
             && coord.y < size.height() as i32
     }
 
@@ -222,6 +238,12 @@ mod grid {
             let width = self.size.width();
             &self.cells[valid_coord_to_index(coord, width)]
         }
+        pub fn tiled_get_mut(&mut self, coord: Coord) -> &mut T {
+            let coord = coord.normalize(self.size);
+            let width = self.size.width();
+            &mut self.cells[valid_coord_to_index(coord, width)]
+        }
+
         pub fn tiled_slice(&self, top_left: Coord, size: Size) -> TiledGridSlice<T> {
             TiledGridSlice {
                 grid: self,
@@ -234,7 +256,7 @@ mod grid {
     #[derive(Clone)]
     pub struct TiledGridSlice<'a, T: 'a> {
         grid: &'a Grid<T>,
-        top_left: Coord,
+        pub top_left: Coord,
         size: Size,
     }
 
@@ -344,7 +366,7 @@ mod direction {
             }
         }
     }
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, Clone)]
     pub struct DirectionTable<T> {
         values: [T; 4],
     }
@@ -390,7 +412,10 @@ pub fn are_patterns_compatible(
     let b_overlap = b + b_offset;
     let a_slice = grid.tiled_slice(a_overlap, overlap_size);
     let b_slice = grid.tiled_slice(b_overlap, overlap_size);
-    a_slice.iter().zip(b_slice.iter()).all(|(a, b)| a == b)
+    a_slice
+        .iter()
+        .zip(b_slice.iter())
+        .all(|(a, b)| a == b)
 }
 
 #[cfg(test)]
@@ -401,8 +426,16 @@ mod pattern_test {
     use grid::Grid;
     #[test]
     fn compatibile_patterns() {
-        let r = Colour { r: 255, g: 0, b: 0 };
-        let b = Colour { r: 0, g: 0, b: 255 };
+        let r = Colour {
+            r: 255,
+            g: 0,
+            b: 0,
+        };
+        let b = Colour {
+            r: 0,
+            g: 0,
+            b: 255,
+        };
         let array = [[r, b, b], [b, r, b]];
         let grid = Grid::from_fn(Size::new(3, 2), |coord| {
             array[coord.y as usize][coord.x as usize]
@@ -475,9 +508,10 @@ impl ImageGrid {
     pub fn from_image(image: &DynamicImage) -> Self {
         let rgb_image = image.to_rgb();
         let size = Size::new(rgb_image.width(), rgb_image.height());
-        let grid = Grid::from_fn(size, |Coord { x, y }| {
-            Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32))
-        });
+        let grid = Grid::from_fn(
+            size,
+            |Coord { x, y }| Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32)),
+        );
         Self { grid }
     }
     pub fn to_image(&self) -> DynamicImage {
@@ -598,8 +632,7 @@ impl MemoizedEntropy {
         self.entropy = compute_entropy(
             self.sum_possible_pattern_count,
             self.sum_possible_pattern_count_log_count,
-        )
-        .unwrap();
+        ).unwrap();
     }
 }
 
@@ -674,13 +707,16 @@ impl Cell {
     ) -> usize {
         assert!(self.num_possible_patterns > 1);
         let mut remaining = rng.gen_range(0, self.sum_possible_pattern_count);
-        for (pattern_id, pattern) in self
-            .possible_pattern_ids
+        for (pattern_id, pattern) in self.possible_pattern_ids
             .iter()
             .zip(pattern_table.patterns.iter().enumerate())
-            .filter_map(
-                |(&is_possible, pattern)| if is_possible { Some(pattern) } else { None },
-            ) {
+            .filter_map(|(&is_possible, pattern)| {
+                if is_possible {
+                    Some(pattern)
+                } else {
+                    None
+                }
+            }) {
             if pattern.count < remaining {
                 remaining -= pattern.count;
             } else {
@@ -703,7 +739,82 @@ impl Cell {
     }
 }
 
-struct OutputGrid {
+#[derive(Debug)]
+struct RemovedPattern {
+    coord: Coord,
+    pattern_id: PatternId,
+}
+
+struct Propagator {
+    remaining_ways_to_become_pattern: Grid<Vec<DirectionTable<usize>>>,
+    removed_patterns_to_propagate: Vec<RemovedPattern>,
+}
+
+impl Propagator {
+    fn new(size: Size, compatibility: &Vec<DirectionTable<Vec<PatternId>>>) -> Self {
+        let initial_ways_to_become_pattern = compatibility
+            .iter()
+            .map(|compatible_patterns_per_direction| {
+                let mut num_ways_to_become_pattern_from_direction =
+                    DirectionTable::default();
+                for &direction in &direction::ALL {
+                    *num_ways_to_become_pattern_from_direction.get_mut(direction) =
+                        compatible_patterns_per_direction
+                            .get(direction.opposite())
+                            .len();
+                }
+                num_ways_to_become_pattern_from_direction
+            })
+            .collect::<Vec<_>>();
+        let remaining_ways_to_become_pattern =
+            Grid::from_fn(size, |_| initial_ways_to_become_pattern.clone());
+
+        Self {
+            remaining_ways_to_become_pattern,
+            removed_patterns_to_propagate: Vec::new(),
+        }
+    }
+
+    fn propagate(
+        &mut self,
+        compatibility: &Vec<DirectionTable<Vec<PatternId>>>,
+        pattern_table: &PatternTable,
+        output_grid: &mut Grid<Cell>,
+    ) {
+        while let Some(removed_pattern) = self.removed_patterns_to_propagate.pop() {
+            println!("{:?}", removed_pattern);
+            for &direction in &direction::ALL {
+                let coord_to_update = removed_pattern.coord + direction.coord();
+                println!("{:?}", coord_to_update);
+                let remaining = self.remaining_ways_to_become_pattern
+                    .tiled_get_mut(coord_to_update);
+                for &pattern_id in compatibility[removed_pattern.pattern_id]
+                    .get(direction)
+                    .iter()
+                {
+                    println!("{:?}", pattern_id);
+                    let count = remaining[pattern_id].get_mut(direction);
+                    if *count == 0 {
+                        continue;
+                    }
+                    *count -= 1;
+                    if *count == 0 {
+                        output_grid
+                            .tiled_get_mut(coord_to_update)
+                            .remove_possible_pattern(pattern_id, pattern_table);
+                        self.removed_patterns_to_propagate
+                            .push(RemovedPattern {
+                                coord: coord_to_update,
+                                pattern_id,
+                            });
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct Observer {
     grid: Grid<Cell>,
 }
 
@@ -717,15 +828,16 @@ enum Observation {
     Incomplete,
 }
 
-impl OutputGrid {
+type PatternId = usize;
+
+impl Observer {
     fn new<R: Rng>(size: Size, pattern_table: &PatternTable, rng: &mut R) -> Self {
         let grid = Grid::from_fn(size, |_| Cell::new(&pattern_table, rng));
         Self { grid }
     }
 
     fn choose_next_cell(&mut self) -> NextCellChoice {
-        match self
-            .grid
+        match self.grid
             .enumerate_mut()
             .filter(|(_, c)| !c.is_decided())
             .min_by(|(_, a), (_, b)| {
@@ -741,18 +853,23 @@ impl OutputGrid {
     fn observe<R: Rng>(
         &mut self,
         pattern_table: &PatternTable,
+        removed_patterns: &mut Vec<RemovedPattern>,
         rng: &mut R,
     ) -> Observation {
         let (cell, coord) = match self.choose_next_cell() {
             NextCellChoice::Complete => return Observation::Complete,
             NextCellChoice::MinEntropyCell { cell, coord } => (cell, coord),
         };
-        let pattern_id = cell.choose_pattern_id(pattern_table, rng);
-        cell.set_single_possible_pattern(pattern_id);
-
-        println!("{:?}", pattern_id);
-        println!("{:?}", pattern_table.patterns[pattern_id]);
-        println!("{:?}", cell);
+        let chosen_pattern_id = cell.choose_pattern_id(pattern_table, rng);
+        for (pattern_id, &is_possible) in cell.possible_pattern_ids.iter().enumerate() {
+            if is_possible {
+                removed_patterns.push(RemovedPattern {
+                    coord,
+                    pattern_id,
+                });
+            }
+        }
+        cell.set_single_possible_pattern(chosen_pattern_id);
 
         Observation::Incomplete
     }
@@ -768,11 +885,11 @@ fn rng_from_integer_seed(seed: u64) -> StdRng {
 
 fn main() {
     let mut rng = rng_from_integer_seed(0);
-    let image = image::load_from_memory(include_bytes!("rooms.png")).unwrap();
+    let image = image::load_from_memory(include_bytes!("a.png")).unwrap();
     let image_grid = ImageGrid::from_image(&image);
     image_grid.to_image().save("/tmp/a.png").unwrap();
-    let pattern_size = Size::new(3, 3);
-    let output_size = Size::new(48, 48);
+    let pattern_size = Size::new(2, 2);
+    let output_size = Size::new(4, 4);
     let mut pre_patterns = HashMap::new();
     for pattern in image_grid.patterns(pattern_size) {
         let info = pre_patterns
@@ -787,7 +904,7 @@ fn main() {
 
     let pattern_table = PatternTable::new(patterns);
 
-    let compatibilty_table = pattern_table
+    let compatibility_table = pattern_table
         .patterns
         .iter()
         .map(|a_info| {
@@ -813,7 +930,17 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    let mut output = OutputGrid::new(output_size, &pattern_table, &mut rng);
-    output.observe(&pattern_table, &mut rng);
-    output.observe(&pattern_table, &mut rng);
+    println!("{:#?}", compatibility_table);
+    let mut propagator = Propagator::new(output_size, &compatibility_table);
+    let mut observer = Observer::new(output_size, &pattern_table, &mut rng);
+    observer.observe(
+        &pattern_table,
+        &mut propagator.removed_patterns_to_propagate,
+        &mut rng,
+    );
+    propagator.propagate(
+        &compatibility_table,
+        &pattern_table,
+        &mut observer.grid,
+    );
 }
