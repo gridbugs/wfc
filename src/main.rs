@@ -69,10 +69,7 @@ mod coord {
             if self.height() <= other.height() {
                 panic!()
             }
-            Size::new(
-                self.width() - other.width(),
-                self.height() - other.height(),
-            )
+            Size::new(self.width() - other.width(), self.height() - other.height())
         }
     }
 
@@ -105,7 +102,9 @@ mod grid {
     }
 
     fn coord_is_valid(coord: Coord, size: Size) -> bool {
-        coord.x >= 0 && coord.y >= 0 && coord.x < size.width() as i32
+        coord.x >= 0
+            && coord.y >= 0
+            && coord.x < size.width() as i32
             && coord.y < size.height() as i32
     }
 
@@ -412,10 +411,7 @@ pub fn are_patterns_compatible(
     let b_overlap = b + b_offset;
     let a_slice = grid.tiled_slice(a_overlap, overlap_size);
     let b_slice = grid.tiled_slice(b_overlap, overlap_size);
-    a_slice
-        .iter()
-        .zip(b_slice.iter())
-        .all(|(a, b)| a == b)
+    a_slice.iter().zip(b_slice.iter()).all(|(a, b)| a == b)
 }
 
 #[cfg(test)]
@@ -426,16 +422,8 @@ mod pattern_test {
     use grid::Grid;
     #[test]
     fn compatibile_patterns() {
-        let r = Colour {
-            r: 255,
-            g: 0,
-            b: 0,
-        };
-        let b = Colour {
-            r: 0,
-            g: 0,
-            b: 255,
-        };
+        let r = Colour { r: 255, g: 0, b: 0 };
+        let b = Colour { r: 0, g: 0, b: 255 };
         let array = [[r, b, b], [b, r, b]];
         let grid = Grid::from_fn(Size::new(3, 2), |coord| {
             array[coord.y as usize][coord.x as usize]
@@ -508,10 +496,9 @@ impl ImageGrid {
     pub fn from_image(image: &DynamicImage) -> Self {
         let rgb_image = image.to_rgb();
         let size = Size::new(rgb_image.width(), rgb_image.height());
-        let grid = Grid::from_fn(
-            size,
-            |Coord { x, y }| Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32)),
-        );
+        let grid = Grid::from_fn(size, |Coord { x, y }| {
+            Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32))
+        });
         Self { grid }
     }
     pub fn to_image(&self) -> DynamicImage {
@@ -602,6 +589,12 @@ impl PatternTable {
             initial_entropy,
         }
     }
+    fn colour(&self, pattern_id: PatternId, input_grid: &Grid<Colour>) -> Colour {
+        input_grid
+            .get(self.patterns[pattern_id].example_coord)
+            .cloned()
+            .unwrap()
+    }
 }
 
 #[derive(Debug)]
@@ -632,7 +625,8 @@ impl MemoizedEntropy {
         self.entropy = compute_entropy(
             self.sum_possible_pattern_count,
             self.sum_possible_pattern_count_log_count,
-        ).unwrap();
+        )
+        .unwrap();
     }
 }
 
@@ -658,6 +652,7 @@ pub struct Cell {
     sum_possible_pattern_count: usize,
     memoized_entropy: MemoizedEntropy,
     noise: u64,
+    chosen_pattern: Option<PatternId>,
 }
 
 impl Cell {
@@ -672,6 +667,7 @@ impl Cell {
             noise: rng.gen(),
             num_possible_patterns,
             sum_possible_pattern_count,
+            chosen_pattern: None,
         }
     }
     fn remove_possible_pattern(
@@ -700,6 +696,12 @@ impl Cell {
         self.possible_pattern_ids[pattern_id] = true;
         self.num_possible_patterns = 1;
     }
+    fn chosen_pattern_id(&self) -> PatternId {
+        self.possible_pattern_ids
+            .iter()
+            .position(Clone::clone)
+            .unwrap()
+    }
     fn choose_pattern_id<R: Rng>(
         &self,
         pattern_table: &PatternTable,
@@ -707,16 +709,19 @@ impl Cell {
     ) -> usize {
         assert!(self.num_possible_patterns > 1);
         let mut remaining = rng.gen_range(0, self.sum_possible_pattern_count);
-        for (pattern_id, pattern) in self.possible_pattern_ids
+        for (pattern_id, pattern) in self
+            .possible_pattern_ids
             .iter()
             .zip(pattern_table.patterns.iter().enumerate())
-            .filter_map(|(&is_possible, pattern)| {
-                if is_possible {
-                    Some(pattern)
-                } else {
-                    None
-                }
-            }) {
+            .filter_map(
+                |(&is_possible, pattern)| {
+                    if is_possible {
+                        Some(pattern)
+                    } else {
+                        None
+                    }
+                },
+            ) {
             if pattern.count < remaining {
                 remaining -= pattern.count;
             } else {
@@ -782,17 +787,15 @@ impl Propagator {
         output_grid: &mut Grid<Cell>,
     ) {
         while let Some(removed_pattern) = self.removed_patterns_to_propagate.pop() {
-            println!("{:?}", removed_pattern);
             for &direction in &direction::ALL {
                 let coord_to_update = removed_pattern.coord + direction.coord();
-                println!("{:?}", coord_to_update);
-                let remaining = self.remaining_ways_to_become_pattern
+                let remaining = self
+                    .remaining_ways_to_become_pattern
                     .tiled_get_mut(coord_to_update);
                 for &pattern_id in compatibility[removed_pattern.pattern_id]
                     .get(direction)
                     .iter()
                 {
-                    println!("{:?}", pattern_id);
                     let count = remaining[pattern_id].get_mut(direction);
                     if *count == 0 {
                         continue;
@@ -802,11 +805,10 @@ impl Propagator {
                         output_grid
                             .tiled_get_mut(coord_to_update)
                             .remove_possible_pattern(pattern_id, pattern_table);
-                        self.removed_patterns_to_propagate
-                            .push(RemovedPattern {
-                                coord: coord_to_update,
-                                pattern_id,
-                            });
+                        self.removed_patterns_to_propagate.push(RemovedPattern {
+                            coord: coord_to_update,
+                            pattern_id,
+                        });
                     }
                 }
             }
@@ -837,7 +839,8 @@ impl Observer {
     }
 
     fn choose_next_cell(&mut self) -> NextCellChoice {
-        match self.grid
+        match self
+            .grid
             .enumerate_mut()
             .filter(|(_, c)| !c.is_decided())
             .min_by(|(_, a), (_, b)| {
@@ -861,17 +864,27 @@ impl Observer {
             NextCellChoice::MinEntropyCell { cell, coord } => (cell, coord),
         };
         let chosen_pattern_id = cell.choose_pattern_id(pattern_table, rng);
+        cell.set_single_possible_pattern(chosen_pattern_id);
         for (pattern_id, &is_possible) in cell.possible_pattern_ids.iter().enumerate() {
-            if is_possible {
-                removed_patterns.push(RemovedPattern {
-                    coord,
-                    pattern_id,
-                });
+            if !is_possible {
+                removed_patterns.push(RemovedPattern { coord, pattern_id });
             }
         }
-        cell.set_single_possible_pattern(chosen_pattern_id);
-
         Observation::Incomplete
+    }
+
+    fn output(
+        &self,
+        size: Size,
+        pattern_table: &PatternTable,
+        input_grid: &Grid<Colour>,
+    ) -> Grid<Colour> {
+        Grid::from_fn(size, |coord| {
+            let cell = self.grid.get(coord).unwrap();
+            let pattern_id = cell.chosen_pattern_id();
+            let colour = pattern_table.colour(pattern_id, input_grid);
+            colour
+        })
     }
 }
 
@@ -887,9 +900,8 @@ fn main() {
     let mut rng = rng_from_integer_seed(0);
     let image = image::load_from_memory(include_bytes!("a.png")).unwrap();
     let image_grid = ImageGrid::from_image(&image);
-    image_grid.to_image().save("/tmp/a.png").unwrap();
-    let pattern_size = Size::new(2, 2);
-    let output_size = Size::new(4, 4);
+    let pattern_size = Size::new(3, 3);
+    let output_size = Size::new(48, 48);
     let mut pre_patterns = HashMap::new();
     for pattern in image_grid.patterns(pattern_size) {
         let info = pre_patterns
@@ -930,17 +942,27 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    println!("{:#?}", compatibility_table);
     let mut propagator = Propagator::new(output_size, &compatibility_table);
     let mut observer = Observer::new(output_size, &pattern_table, &mut rng);
-    observer.observe(
-        &pattern_table,
-        &mut propagator.removed_patterns_to_propagate,
-        &mut rng,
-    );
-    propagator.propagate(
-        &compatibility_table,
-        &pattern_table,
-        &mut observer.grid,
-    );
+    loop {
+        let observation = observer.observe(
+            &pattern_table,
+            &mut propagator.removed_patterns_to_propagate,
+            &mut rng,
+        );
+        match observation {
+            Observation::Complete => break,
+            Observation::Incomplete => propagator.propagate(
+                &compatibility_table,
+                &pattern_table,
+                &mut observer.grid,
+            ),
+        }
+    }
+
+    let output = observer.output(output_size, &pattern_table, &image_grid.grid);
+
+    let output_image = ImageGrid { grid: output };
+
+    output_image.to_image().save("/tmp/a.png").unwrap();
 }
