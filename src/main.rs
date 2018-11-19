@@ -340,7 +340,7 @@ mod grid {
 
 mod direction {
     use coord::Coord;
-    #[derive(Clone, Copy)]
+    #[derive(Debug, Clone, Copy)]
     pub enum Direction {
         North,
         East,
@@ -375,6 +375,9 @@ mod direction {
         }
         pub fn get_mut(&mut self, direction: Direction) -> &mut T {
             &mut self.values[direction as usize]
+        }
+        pub fn iter_mut(&mut self) -> ::std::slice::IterMut<T> {
+            self.values.iter_mut()
         }
     }
     pub const ALL: [Direction; 4] = [
@@ -675,7 +678,7 @@ impl Cell {
         pattern_id: usize,
         pattern_table: &PatternTable,
     ) {
-        assert!(self.num_possible_patterns > 0);
+        assert!(self.num_possible_patterns > 1);
         let possible_pattern_id = &mut self.possible_pattern_ids[pattern_id];
         if !*possible_pattern_id {
             return;
@@ -686,15 +689,6 @@ impl Cell {
             .remove_pattern(pattern.count as f64, pattern.count_log_count);
         self.sum_possible_pattern_count -= pattern.count;
         self.num_possible_patterns -= 1;
-    }
-    fn set_single_possible_pattern(&mut self, pattern_id: usize) {
-        assert!(self.possible_pattern_ids[pattern_id]);
-        assert!(self.num_possible_patterns > 0);
-        self.possible_pattern_ids
-            .iter_mut()
-            .for_each(|p| *p = false);
-        self.possible_pattern_ids[pattern_id] = true;
-        self.num_possible_patterns = 1;
     }
     fn chosen_pattern_id(&self) -> PatternId {
         self.possible_pattern_ids
@@ -780,6 +774,14 @@ impl Propagator {
         }
     }
 
+    fn add(&mut self, coord: Coord, pattern_id: PatternId) {
+        self.removed_patterns_to_propagate
+            .push(RemovedPattern { coord, pattern_id });
+        self.remaining_ways_to_become_pattern.tiled_get_mut(coord)[pattern_id]
+            .iter_mut()
+            .for_each(|c| *c = 0);
+    }
+
     fn propagate(
         &mut self,
         compatibility: &Vec<DirectionTable<Vec<PatternId>>>,
@@ -796,19 +798,25 @@ impl Propagator {
                     .get(direction)
                     .iter()
                 {
-                    let count = remaining[pattern_id].get_mut(direction);
-                    if *count == 0 {
-                        continue;
-                    }
-                    *count -= 1;
-                    if *count == 0 {
+                    let remaining = &mut remaining[pattern_id];
+                    let count = {
+                        let count = remaining.get_mut(direction);
+                        if *count == 0 {
+                            continue;
+                        }
+                        *count -= 1;
+                        *count
+                    };
+                    if count == 0 {
                         output_grid
                             .tiled_get_mut(coord_to_update)
                             .remove_possible_pattern(pattern_id, pattern_table);
+
                         self.removed_patterns_to_propagate.push(RemovedPattern {
                             coord: coord_to_update,
                             pattern_id,
                         });
+                        remaining.iter_mut().for_each(|c| *c = 0);
                     }
                 }
             }
@@ -856,7 +864,7 @@ impl Observer {
     fn observe<R: Rng>(
         &mut self,
         pattern_table: &PatternTable,
-        removed_patterns: &mut Vec<RemovedPattern>,
+        propagator: &mut Propagator,
         rng: &mut R,
     ) -> Observation {
         let (cell, coord) = match self.choose_next_cell() {
@@ -864,10 +872,12 @@ impl Observer {
             NextCellChoice::MinEntropyCell { cell, coord } => (cell, coord),
         };
         let chosen_pattern_id = cell.choose_pattern_id(pattern_table, rng);
-        cell.set_single_possible_pattern(chosen_pattern_id);
-        for (pattern_id, &is_possible) in cell.possible_pattern_ids.iter().enumerate() {
-            if !is_possible {
-                removed_patterns.push(RemovedPattern { coord, pattern_id });
+        for pattern_id in 0..cell.possible_pattern_ids.len() {
+            if pattern_id != chosen_pattern_id {
+                if cell.possible_pattern_ids[pattern_id] {
+                    cell.remove_possible_pattern(pattern_id, pattern_table);
+                    propagator.add(coord, pattern_id);
+                }
             }
         }
         Observation::Incomplete
@@ -897,8 +907,8 @@ fn rng_from_integer_seed(seed: u64) -> StdRng {
 }
 
 fn main() {
-    let mut rng = rng_from_integer_seed(0);
-    let image = image::load_from_memory(include_bytes!("a.png")).unwrap();
+    let mut rng = rand::thread_rng();
+    let image = image::load_from_memory(include_bytes!("rooms.png")).unwrap();
     let image_grid = ImageGrid::from_image(&image);
     let pattern_size = Size::new(3, 3);
     let output_size = Size::new(48, 48);
@@ -944,12 +954,10 @@ fn main() {
 
     let mut propagator = Propagator::new(output_size, &compatibility_table);
     let mut observer = Observer::new(output_size, &pattern_table, &mut rng);
+
+    let mut count = 0;
     loop {
-        let observation = observer.observe(
-            &pattern_table,
-            &mut propagator.removed_patterns_to_propagate,
-            &mut rng,
-        );
+        let observation = observer.observe(&pattern_table, &mut propagator, &mut rng);
         match observation {
             Observation::Complete => break,
             Observation::Incomplete => propagator.propagate(
@@ -958,6 +966,7 @@ fn main() {
                 &mut observer.grid,
             ),
         }
+        count += 1;
     }
 
     let output = observer.output(output_size, &pattern_table, &image_grid.grid);
