@@ -5,5 +5,6 @@ authors = ["Stephen Sherratt <sfsherratt@gmail.com>"]
 
 [dependencies]
 image = "0.20"
+rand_xorshift = "0.1"
 rand = "0.6"
 hashbrown = "0.1"
