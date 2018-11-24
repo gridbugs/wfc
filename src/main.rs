@@ -62,6 +62,16 @@ mod coord {
         }
     }
 
+    impl ::std::ops::Add for Size {
+        type Output = Size;
+        fn add(self, other: Self) -> Self::Output {
+            Size::new(
+                self.width() + other.width(),
+                self.height() + other.height(),
+            )
+        }
+    }
+
     impl ::std::ops::Sub for Size {
         type Output = Size;
         fn sub(self, other: Self) -> Self::Output {
@@ -97,8 +107,143 @@ mod coord {
 mod grid {
     use coord::{Coord, Size};
     use std::hash::{Hash, Hasher};
-    pub struct Grid<T> {
+
+    pub trait CoordSystem {
+        type Iter: Iterator<Item = Coord>;
+        fn index(&self, coord: Coord) -> usize;
+        fn size(&self) -> Size;
+        fn iter(&self) -> Self::Iter;
+    }
+
+    #[derive(Clone)]
+    pub struct SubGrid {
+        sub_size: Size,
+        grid_size: Size,
+        full_grid_size: Size,
+        extra_size: Size,
+    }
+
+    impl CoordSystem for SubGrid {
+        type Iter = SubGridIter;
+        fn index(&self, _coord: Coord) -> usize {
+            unimplemented!()
+        }
+        fn iter(&self) -> Self::Iter {
+            SubGridIter::new(self.sub_size, self.grid_size)
+        }
+        fn size(&self) -> Size {
+            self.grid_size
+        }
+    }
+
+    pub struct SubGridIter {
+        inner_iter: XThenYIter,
+        outer_iter: XThenYIter,
+        extra_size: Size,
+        inner_size: Size,
+        outer_size: Size,
+        offset: Coord,
+    }
+
+    impl SubGridIter {
+        fn new(sub_grid_size: Size, grid_size: Size) -> Self {
+            let inner_size = sub_grid_size;
+            let extra_size = Size::new(
+                grid_size.width() % sub_grid_size.width(),
+                grid_size.height() % sub_grid_size.height(),
+            );
+            let outer_size = Size::new(
+                grid_size.width() / sub_grid_size.width(),
+                grid_size.height() / sub_grid_size.height(),
+            )
+                + Size::new(
+                    (extra_size.width() != 0) as u32,
+                    (extra_size.height() != 0) as u32,
+                );
+            let mut outer_iter = XThenYIter::new(outer_size);
+            let inner_iter = if let Some(outer_coord) = outer_iter.next() {
+                let width = if outer_coord.x == outer_size.width() as i32 - 1 {
+                    extra_size.width()
+                } else {
+                    inner_size.width()
+                };
+                let height = if outer_coord.y == outer_size.height() as i32 - 1 {
+                    extra_size.height()
+                } else {
+                    inner_size.height()
+                };
+                XThenYIter::new(Size::new(width, height))
+            } else {
+                XThenYIter::new(Size::new(0, 0))
+            };
+
+            Self {
+                inner_iter,
+                outer_iter,
+                extra_size,
+                inner_size,
+                outer_size,
+                offset: Coord::new(0, 0),
+            }
+        }
+    }
+
+    impl Iterator for SubGridIter {
+        type Item = Coord;
+        fn next(&mut self) -> Option<Self::Item> {
+            loop {
+                if let Some(inner_coord) = self.inner_iter.next() {
+                    return Some(self.offset + inner_coord);
+                }
+                if let Some(outer_coord) = self.outer_iter.next() {
+                    self.offset = Coord::new(
+                        outer_coord.x * self.inner_size.width() as i32,
+                        outer_coord.y * self.inner_size.height() as i32,
+                    );
+                    let width = if outer_coord.x == self.outer_size.width() as i32 - 1 {
+                        self.extra_size.width()
+                    } else {
+                        self.inner_size.width()
+                    };
+                    let height = if outer_coord.y == self.outer_size.height() as i32 - 1 {
+                        self.extra_size.height()
+                    } else {
+                        self.inner_size.height()
+                    };
+                    self.inner_iter = XThenYIter::new(Size::new(width, height));
+                    continue;
+                }
+                return None;
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    pub struct XThenY {
         size: Size,
+    }
+
+    impl XThenY {
+        pub fn new(size: Size) -> Self {
+            Self { size }
+        }
+    }
+
+    impl CoordSystem for XThenY {
+        type Iter = XThenYIter;
+        fn index(&self, coord: Coord) -> usize {
+            coord.x as usize + coord.y as usize * self.size.width() as usize
+        }
+        fn iter(&self) -> Self::Iter {
+            XThenYIter::new(self.size)
+        }
+        fn size(&self) -> Size {
+            self.size
+        }
+    }
+
+    pub struct Grid<T, S: CoordSystem = XThenY> {
+        coord_system: S,
         cells: Vec<T>,
     }
 
@@ -114,12 +259,12 @@ mod grid {
     pub type GridIter<'a, T> = ::std::slice::Iter<'a, T>;
     pub type GridIterMut<'a, T> = ::std::slice::IterMut<'a, T>;
 
-    pub struct CoordIter {
+    pub struct XThenYIter {
         coord: Coord,
         size: Size,
     }
 
-    impl CoordIter {
+    impl XThenYIter {
         pub fn new(size: Size) -> Self {
             Self {
                 size,
@@ -128,7 +273,7 @@ mod grid {
         }
     }
 
-    impl Iterator for CoordIter {
+    impl Iterator for XThenYIter {
         type Item = Coord;
         fn next(&mut self) -> Option<Self::Item> {
             if self.coord.y == self.size.height() as i32 {
@@ -144,12 +289,12 @@ mod grid {
         }
     }
 
-    pub struct Enumerate<'a, T: 'a> {
+    pub struct Enumerate<'a, T: 'a, I: Iterator<Item = Coord>> {
         grid_iter: GridIter<'a, T>,
-        coord_iter: CoordIter,
+        coord_iter: I,
     }
 
-    impl<'a, T> Iterator for Enumerate<'a, T> {
+    impl<'a, T, I: Iterator<Item = Coord>> Iterator for Enumerate<'a, T, I> {
         type Item = (Coord, &'a T);
         fn next(&mut self) -> Option<Self::Item> {
             self.coord_iter
@@ -158,12 +303,12 @@ mod grid {
         }
     }
 
-    pub struct EnumerateMut<'a, T: 'a> {
+    pub struct EnumerateMut<'a, T: 'a, I: Iterator<Item = Coord>> {
         grid_iter: GridIterMut<'a, T>,
-        coord_iter: CoordIter,
+        coord_iter: I,
     }
 
-    impl<'a, T> Iterator for EnumerateMut<'a, T> {
+    impl<'a, T, I: Iterator<Item = Coord>> Iterator for EnumerateMut<'a, T, I> {
         type Item = (Coord, &'a mut T);
         fn next(&mut self) -> Option<Self::Item> {
             self.coord_iter
@@ -171,47 +316,62 @@ mod grid {
                 .and_then(|coord| self.grid_iter.next().map(|value| (coord, value)))
         }
     }
+    impl<T, S> Grid<T, S>
+    where
+        S: CoordSystem,
+    {
+        pub fn from_fn<F>(coord_system: S, mut f: F) -> Self
+        where
+            F: FnMut(Coord) -> T,
+        {
+            let count = coord_system.size().count();
+            let mut cells = Vec::with_capacity(count);
+            for coord in coord_system.iter() {
+                cells.push(f(coord));
+            }
+            if cells.len() != count {
+                panic!("mismatch between size and coord system iter")
+            }
+            Self {
+                cells,
+                coord_system,
+            }
+        }
+    }
 
-    impl<T> Grid<T> {
+    impl<T, S> Grid<T, S>
+    where
+        S: CoordSystem + Clone,
+    {
         pub fn size(&self) -> Size {
-            self.size
+            self.coord_system.size()
+        }
+        fn index_from_valid(&self, coord: Coord) -> usize {
+            self.coord_system.index(coord)
         }
         fn get_valid_coord(&self, coord: Coord) -> Option<&T> {
-            self.cells
-                .get(valid_coord_to_index(coord, self.size.width()))
+            self.cells.get(self.index_from_valid(coord))
         }
         fn get_valid_coord_mut(&mut self, coord: Coord) -> Option<&mut T> {
-            self.cells
-                .get_mut(valid_coord_to_index(coord, self.size.width()))
+            let index = self.index_from_valid(coord);
+            self.cells.get_mut(index)
         }
 
         pub fn get(&self, coord: Coord) -> Option<&T> {
-            if coord_is_valid(coord, self.size) {
+            if coord_is_valid(coord, self.size()) {
                 self.get_valid_coord(coord)
             } else {
                 None
             }
         }
         pub fn get_mut(&mut self, coord: Coord) -> Option<&mut T> {
-            if coord_is_valid(coord, self.size) {
+            if coord_is_valid(coord, self.size()) {
                 self.get_valid_coord_mut(coord)
             } else {
                 None
             }
         }
 
-        pub fn from_fn<F>(size: Size, mut f: F) -> Self
-        where
-            F: FnMut(Coord) -> T,
-        {
-            let count = size.count();
-            let mut cells = Vec::with_capacity(count);
-            for coord in CoordIter::new(size) {
-                cells.push(f(coord));
-            }
-            assert_eq!(cells.len(), count);
-            Self { cells, size }
-        }
         pub fn iter(&self) -> GridIter<T> {
             self.cells.iter()
         }
@@ -219,16 +379,16 @@ mod grid {
             self.cells.iter_mut()
         }
 
-        fn coord_iter(&self) -> CoordIter {
-            CoordIter::new(self.size)
+        fn coord_iter(&self) -> S::Iter {
+            self.coord_system.iter()
         }
-        pub fn enumerate(&self) -> Enumerate<T> {
+        pub fn enumerate(&self) -> Enumerate<T, S::Iter> {
             Enumerate {
                 grid_iter: self.iter(),
                 coord_iter: self.coord_iter(),
             }
         }
-        pub fn enumerate_mut(&mut self) -> EnumerateMut<T> {
+        pub fn enumerate_mut(&mut self) -> EnumerateMut<T, S::Iter> {
             EnumerateMut {
                 coord_iter: self.coord_iter(),
                 grid_iter: self.iter_mut(),
@@ -236,17 +396,17 @@ mod grid {
         }
 
         pub fn tiled_get(&self, coord: Coord) -> &T {
-            let coord = coord.normalize(self.size);
-            let width = self.size.width();
+            let coord = coord.normalize(self.size());
+            let width = self.size().width();
             &self.cells[valid_coord_to_index(coord, width)]
         }
         pub fn tiled_get_mut(&mut self, coord: Coord) -> &mut T {
-            let coord = coord.normalize(self.size);
-            let width = self.size.width();
+            let coord = coord.normalize(self.size());
+            let width = self.size().width();
             &mut self.cells[valid_coord_to_index(coord, width)]
         }
 
-        pub fn tiled_slice(&self, top_left: Coord, size: Size) -> TiledGridSlice<T> {
+        pub fn tiled_slice(&self, top_left: Coord, size: Size) -> TiledGridSlice<T, S> {
             TiledGridSlice {
                 grid: self,
                 top_left,
@@ -256,19 +416,22 @@ mod grid {
     }
 
     #[derive(Clone)]
-    pub struct TiledGridSlice<'a, T: 'a> {
-        grid: &'a Grid<T>,
+    pub struct TiledGridSlice<'a, T: 'a, S: 'a + CoordSystem + Clone = XThenY> {
+        grid: &'a Grid<T, S>,
         pub top_left: Coord,
         size: Size,
     }
 
-    pub struct TiledGridSliceIter<'a, T: 'a> {
-        grid: &'a Grid<T>,
-        coord_iter: CoordIter,
+    pub struct TiledGridSliceIter<'a, T: 'a, S: 'a + CoordSystem> {
+        grid: &'a Grid<T, S>,
+        coord_iter: XThenYIter,
         top_left: Coord,
     }
 
-    impl<'a, T> Iterator for TiledGridSliceIter<'a, T> {
+    impl<'a, T, S> Iterator for TiledGridSliceIter<'a, T, S>
+    where
+        S: CoordSystem + Clone,
+    {
         type Item = &'a T;
         fn next(&mut self) -> Option<Self::Item> {
             self.coord_iter
@@ -277,7 +440,10 @@ mod grid {
         }
     }
 
-    impl<'a, T> TiledGridSlice<'a, T> {
+    impl<'a, T, S> TiledGridSlice<'a, T, S>
+    where
+        S: CoordSystem + Clone,
+    {
         pub fn top_left(&self) -> Coord {
             self.top_left
         }
@@ -288,16 +454,19 @@ mod grid {
                 None
             }
         }
-        pub fn iter(&self) -> TiledGridSliceIter<T> {
+        pub fn iter(&self) -> TiledGridSliceIter<T, S> {
             TiledGridSliceIter {
                 grid: self.grid,
                 top_left: self.top_left,
-                coord_iter: CoordIter::new(self.size),
+                coord_iter: XThenYIter::new(self.size),
             }
         }
     }
 
-    impl<'a, T: Hash> Hash for TiledGridSlice<'a, T> {
+    impl<'a, T: Hash, S> Hash for TiledGridSlice<'a, T, S>
+    where
+        S: CoordSystem + Clone,
+    {
         fn hash<H: Hasher>(&self, state: &mut H) {
             for value in self.iter() {
                 value.hash(state);
@@ -305,28 +474,35 @@ mod grid {
         }
     }
 
-    impl<'a, T: PartialEq> PartialEq for TiledGridSlice<'a, T> {
+    impl<'a, T: PartialEq, S> PartialEq for TiledGridSlice<'a, T, S>
+    where
+        S: CoordSystem + Clone,
+    {
         fn eq(&self, other: &Self) -> bool {
             self.size == other.size && self.iter().zip(other.iter()).all(|(s, o)| s.eq(o))
         }
     }
-    impl<'a, T: Eq> Eq for TiledGridSlice<'a, T> {}
+    impl<'a, T: Eq, S> Eq for TiledGridSlice<'a, T, S>
+    where
+        S: CoordSystem + Clone,
+    {
+    }
 
     #[cfg(test)]
     mod test {
-        use super::Grid;
+        use super::*;
         use coord::{Coord, Size};
         use std::collections::HashSet;
         #[test]
         fn tiling() {
-            let grid = Grid::from_fn(Size::new(4, 4), |coord| coord);
+            let grid = Grid::from_fn(XThenY::new(Size::new(4, 4)), |coord| coord);
             let slice = grid.tiled_slice(Coord::new(-1, -1), Size::new(2, 2));
             let value = *slice.get(Coord::new(0, 1)).unwrap();
             assert_eq!(value, Coord::new(3, 0));
         }
         #[test]
         fn tiled_grid_slice_hash() {
-            let mut grid = Grid::from_fn(Size::new(4, 4), |_| 0);
+            let mut grid = Grid::from_fn(XThenY::new(Size::new(4, 4)), |_| 0);
             *grid.get_mut(Coord::new(3, 3)).unwrap() = 1;
             let size = Size::new(2, 2);
             let a = grid.tiled_slice(Coord::new(0, 0), size);
@@ -337,6 +513,25 @@ mod grid {
             set.insert(b);
             set.insert(c);
             assert_eq!(set.len(), 2);
+        }
+        #[test]
+        fn sub_grid_iter() {
+            let iter = SubGridIter::new(Size::new(2, 2), Size::new(3, 3));
+            let coords = iter.map(|Coord { x, y }| (x, y)).collect::<Vec<_>>();
+            assert_eq!(
+                coords,
+                vec![
+                    (0, 0),
+                    (1, 0),
+                    (0, 1),
+                    (1, 1),
+                    (2, 0),
+                    (2, 1),
+                    (0, 2),
+                    (1, 2),
+                    (2, 2),
+                ]
+            );
         }
     }
 }
@@ -393,7 +588,7 @@ mod direction {
 
 use coord::{Coord, Size};
 use direction::{Direction, DirectionTable};
-use grid::{CoordIter, Grid, TiledGridSlice};
+use grid::{Grid, TiledGridSlice, XThenY, XThenYIter};
 use hashbrown::HashMap;
 use image::{DynamicImage, Rgb, RgbImage};
 use rand::{Rng, SeedableRng};
@@ -444,7 +639,7 @@ mod pattern_test {
             b: 255,
         };
         let array = [[r, b, b], [b, r, b]];
-        let grid = Grid::from_fn(Size::new(3, 2), |coord| {
+        let grid = Grid::from_fn(XThenY::new(Size::new(3, 2)), |coord| {
             array[coord.y as usize][coord.x as usize]
         });
         let pattern_size = Size::new(2, 2);
@@ -495,13 +690,10 @@ impl Colour {
         }
     }
 }
-pub struct ImageGrid {
-    pub grid: Grid<Colour>,
-}
 pub struct PatternIter<'a> {
     grid: &'a Grid<Colour>,
     pattern_size: Size,
-    coord_iter: CoordIter,
+    coord_iter: XThenYIter,
 }
 impl<'a> Iterator for PatternIter<'a> {
     type Item = TiledGridSlice<'a, Colour>;
@@ -511,14 +703,16 @@ impl<'a> Iterator for PatternIter<'a> {
             .map(|coord| self.grid.tiled_slice(coord, self.pattern_size))
     }
 }
+pub struct ImageGrid {
+    pub grid: Grid<Colour>,
+}
 impl ImageGrid {
     pub fn from_image(image: &DynamicImage) -> Self {
         let rgb_image = image.to_rgb();
         let size = Size::new(rgb_image.width(), rgb_image.height());
-        let grid = Grid::from_fn(
-            size,
-            |Coord { x, y }| Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32)),
-        );
+        let grid = Grid::from_fn(XThenY::new(size), |Coord { x, y }| {
+            Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32))
+        });
         Self { grid }
     }
     pub fn to_image(&self) -> DynamicImage {
@@ -533,7 +727,7 @@ impl ImageGrid {
         PatternIter {
             grid: &self.grid,
             pattern_size,
-            coord_iter: CoordIter::new(self.grid.size()),
+            coord_iter: XThenYIter::new(self.grid.size()),
         }
     }
 }
@@ -726,8 +920,10 @@ struct RemovedPattern {
     pattern_id: PatternId,
 }
 
+type CS = grid::XThenY;
+
 struct Propagator {
-    remaining_ways_to_become_pattern: Grid<Vec<DirectionTable<u32>>>,
+    remaining_ways_to_become_pattern: Grid<Vec<DirectionTable<u32>>, CS>,
     removed_patterns_to_propagate: Vec<RemovedPattern>,
     next_entropies: HashMap<Coord, EntropyWithNoise>,
 }
@@ -748,8 +944,9 @@ impl Propagator {
                 num_ways_to_become_pattern_from_direction
             })
             .collect::<Vec<_>>();
-        let remaining_ways_to_become_pattern =
-            Grid::from_fn(size, |_| initial_ways_to_become_pattern.clone());
+        let remaining_ways_to_become_pattern = Grid::from_fn(XThenY::new(size), |_| {
+            initial_ways_to_become_pattern.clone()
+        });
 
         Self {
             remaining_ways_to_become_pattern,
@@ -774,7 +971,7 @@ impl Propagator {
         &mut self,
         compatibility: &Vec<DirectionTable<Vec<PatternId>>>,
         pattern_table: &PatternTable,
-        output_grid: &mut Grid<Cell>,
+        output_grid: &mut Grid<Cell, CS>,
         entropy_priority_queue: &mut BinaryHeap<CoordEntropy>,
         num_undecided_cells: &mut u32,
     ) {
@@ -857,7 +1054,7 @@ impl Ord for CoordEntropy {
 }
 
 struct Observer {
-    grid: Grid<Cell>,
+    grid: Grid<Cell, CS>,
     entropy_priority_queue: BinaryHeap<CoordEntropy>,
     num_undecided_cells: u32,
 }
@@ -876,7 +1073,7 @@ type PatternId = u32;
 
 impl Observer {
     fn new<R: Rng>(size: Size, pattern_table: &PatternTable, rng: &mut R) -> Self {
-        let grid = Grid::from_fn(size, |_| Cell::new(&pattern_table, rng));
+        let grid = Grid::from_fn(XThenY::new(size), |_| Cell::new(&pattern_table, rng));
         let entropy_priority_queue = grid.enumerate()
             .map(|(coord, cell)| CoordEntropy {
                 coord,
@@ -947,7 +1144,7 @@ impl Observer {
         pattern_table: &PatternTable,
         input_grid: &Grid<Colour>,
     ) -> Grid<Colour> {
-        Grid::from_fn(size, |coord| {
+        Grid::from_fn(XThenY::new(size), |coord| {
             let cell = self.grid.get(coord).unwrap();
             let pattern_id = cell.chosen_pattern_id();
             let colour = pattern_table.colour(pattern_id, input_grid);
