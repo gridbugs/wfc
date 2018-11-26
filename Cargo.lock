@@ -40,6 +40,10 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "coord_2d"
+version = "0.1.0"
+
+[[package]]
 name = "crossbeam-deque"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -80,6 +84,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "direction"
+version = "0.16.1"
+dependencies = [
+ "coord_2d 0.1.0",
+]
+
+[[package]]
 name = "either"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -105,6 +116,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "color_quant 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lzw 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "grid_2d"
+version = "0.9.1"
+dependencies = [
+ "coord_2d 0.1.0",
 ]
 
 [[package]]
@@ -399,6 +417,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "wfc"
 version = "0.1.0"
 dependencies = [
+ "coord_2d 0.1.0",
+ "direction 0.16.1",
+ "grid_2d 0.9.1",
  "hashbrown 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.20.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",

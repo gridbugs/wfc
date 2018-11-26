@@ -8,3 +8,6 @@ image = "0.20"
 rand_xorshift = "0.1"
 rand = "0.6"
 hashbrown = "0.1"
+coord_2d = { path = "/home/steve/src/coord-2d" }
+grid_2d = { path = "/home/steve/src/grid-2d" }
+direction = { path = "/home/steve/src/direction" }
