@@ -14,12 +14,12 @@ mod tiled_slice {
 
     pub fn new<'a, T, S: CoordSystem + Clone>(
         grid: &'a Grid<T, S>,
-        top_left: Coord,
+        offset: Coord,
         size: Size,
     ) -> TiledGridSlice<'a, T, S> {
         TiledGridSlice {
             grid,
-            top_left,
+            offset,
             size,
         }
     }
@@ -27,14 +27,14 @@ mod tiled_slice {
     #[derive(Clone)]
     pub struct TiledGridSlice<'a, T: 'a, S: 'a + CoordSystem + Clone = XThenY> {
         grid: &'a Grid<T, S>,
-        top_left: Coord,
+        offset: Coord,
         size: Size,
     }
 
     pub struct TiledGridSliceIter<'a, T: 'a, S: 'a + CoordSystem> {
         grid: &'a Grid<T, S>,
         coord_iter: XThenYIter,
-        top_left: Coord,
+        offset: Coord,
     }
 
     impl<'a, T, S> Iterator for TiledGridSliceIter<'a, T, S>
@@ -45,7 +45,7 @@ mod tiled_slice {
         fn next(&mut self) -> Option<Self::Item> {
             self.coord_iter
                 .next()
-                .map(|coord| self.grid.tiled_get(self.top_left + coord))
+                .map(|coord| self.grid.tiled_get(self.offset + coord))
         }
     }
 
@@ -53,12 +53,12 @@ mod tiled_slice {
     where
         S: CoordSystem + Clone,
     {
-        pub fn top_left(&self) -> Coord {
-            self.top_left
+        pub fn offset(&self) -> Coord {
+            self.offset
         }
         pub fn get(&self, coord: Coord) -> Option<&T> {
             if coord.is_valid(self.size) {
-                Some(self.grid.tiled_get(self.top_left + coord))
+                Some(self.grid.tiled_get(self.offset + coord))
             } else {
                 None
             }
@@ -66,7 +66,7 @@ mod tiled_slice {
         pub fn iter(&self) -> TiledGridSliceIter<T, S> {
             TiledGridSliceIter {
                 grid: self.grid,
-                top_left: self.top_left,
+                offset: self.offset,
                 coord_iter: XThenYIter::from(self.size),
             }
         }
@@ -101,23 +101,22 @@ mod tiled_slice {
     mod test {
         use super::*;
         use coord_2d::{Coord, Size};
-        use grid_2d::coord_system::{XThenY, XThenYIter};
         use std::collections::HashSet;
         #[test]
         fn tiling() {
-            let grid = Grid::new_fn(XThenY::new(Size::new(4, 4)), |coord| coord);
-            let slice = grid.tiled_slice(Coord::new(-1, -1), Size::new(2, 2));
+            let grid = Grid::new_fn(Size::new(4, 4), |coord| coord);
+            let slice = new(&grid, Coord::new(-1, -1), Size::new(2, 2));
             let value = *slice.get(Coord::new(0, 1)).unwrap();
             assert_eq!(value, Coord::new(3, 0));
         }
         #[test]
         fn tiled_grid_slice_hash() {
-            let mut grid = Grid::new_fn(XThenY::new(Size::new(4, 4)), |_| 0);
+            let mut grid = Grid::new_fn(Size::new(4, 4), |_| 0);
             *grid.get_mut(Coord::new(3, 3)).unwrap() = 1;
             let size = Size::new(2, 2);
-            let a = grid.tiled_slice(Coord::new(0, 0), size);
-            let b = grid.tiled_slice(Coord::new(2, 2), size);
-            let c = grid.tiled_slice(Coord::new(0, 2), size);
+            let a = new(&grid, Coord::new(0, 0), size);
+            let b = new(&grid, Coord::new(2, 2), size);
+            let c = new(&grid, Coord::new(0, 2), size);
             let mut set = HashSet::new();
             set.insert(a);
             set.insert(b);
@@ -166,7 +165,7 @@ pub fn are_patterns_compatible(
 #[cfg(test)]
 mod pattern_test {
     use super::*;
-    use coord::{Coord, Size};
+    use coord_2d::{Coord, Size};
     use direction::CardinalDirection;
     use grid_2d::Grid;
     #[test]
@@ -182,7 +181,7 @@ mod pattern_test {
             b: 255,
         };
         let array = [[r, b, b], [b, r, b]];
-        let grid = Grid::new_fn(XThenY::new(Size::new(3, 2)), |coord| {
+        let grid = Grid::new_fn(Size::new(3, 2), |coord| {
             array[coord.y as usize][coord.x as usize]
         });
         let pattern_size = Size::new(2, 2);
@@ -715,7 +714,7 @@ fn main() {
     for pattern in image_grid.patterns(pattern_size) {
         let info = pre_patterns
             .entry(pattern.clone())
-            .or_insert_with(|| PrePattern::new(pattern.top_left(), 0));
+            .or_insert_with(|| PrePattern::new(pattern.offset(), 0));
         info.count += 1;
     }
     let patterns = pre_patterns
