@@ -3,6 +3,9 @@ name = "wfc"
 version = "0.1.0"
 authors = ["Stephen Sherratt <sfsherratt@gmail.com>"]
 
+[profile.release]
+lto=true
+
 [dependencies]
 image = "0.20"
 rand_xorshift = "0.1"
