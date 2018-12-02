@@ -6,136 +6,18 @@ extern crate image;
 extern crate rand;
 extern crate rand_xorshift;
 
-mod tiled_slice {
-    use coord_2d::*;
-    use grid_2d::coord_system::{CoordSystem, XThenY, XThenYIter};
-    use grid_2d::*;
-    use std::hash::{Hash, Hasher};
+mod context;
+mod tiled_slice;
 
-    pub fn new<'a, T, S: CoordSystem + Clone>(
-        grid: &'a Grid<T, S>,
-        offset: Coord,
-        size: Size,
-    ) -> TiledGridSlice<'a, T, S> {
-        TiledGridSlice {
-            grid,
-            offset,
-            size,
-        }
-    }
-
-    #[derive(Clone)]
-    pub struct TiledGridSlice<'a, T: 'a, S: 'a + CoordSystem + Clone = XThenY> {
-        grid: &'a Grid<T, S>,
-        offset: Coord,
-        size: Size,
-    }
-
-    pub struct TiledGridSliceIter<'a, T: 'a, S: 'a + CoordSystem> {
-        grid: &'a Grid<T, S>,
-        coord_iter: XThenYIter,
-        offset: Coord,
-    }
-
-    impl<'a, T, S> Iterator for TiledGridSliceIter<'a, T, S>
-    where
-        S: CoordSystem + Clone,
-    {
-        type Item = &'a T;
-        fn next(&mut self) -> Option<Self::Item> {
-            self.coord_iter
-                .next()
-                .map(|coord| self.grid.tiled_get(self.offset + coord))
-        }
-    }
-
-    impl<'a, T, S> TiledGridSlice<'a, T, S>
-    where
-        S: CoordSystem + Clone,
-    {
-        pub fn offset(&self) -> Coord {
-            self.offset
-        }
-        pub fn get(&self, coord: Coord) -> Option<&T> {
-            if coord.is_valid(self.size) {
-                Some(self.grid.tiled_get(self.offset + coord))
-            } else {
-                None
-            }
-        }
-        pub fn iter(&self) -> TiledGridSliceIter<T, S> {
-            TiledGridSliceIter {
-                grid: self.grid,
-                offset: self.offset,
-                coord_iter: XThenYIter::from(self.size),
-            }
-        }
-    }
-
-    impl<'a, T: Hash, S> Hash for TiledGridSlice<'a, T, S>
-    where
-        S: CoordSystem + Clone,
-    {
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            for value in self.iter() {
-                value.hash(state);
-            }
-        }
-    }
-
-    impl<'a, T: PartialEq, S> PartialEq for TiledGridSlice<'a, T, S>
-    where
-        S: CoordSystem + Clone,
-    {
-        fn eq(&self, other: &Self) -> bool {
-            self.size == other.size && self.iter().zip(other.iter()).all(|(s, o)| s.eq(o))
-        }
-    }
-    impl<'a, T: Eq, S> Eq for TiledGridSlice<'a, T, S>
-    where
-        S: CoordSystem + Clone,
-    {
-    }
-
-    #[cfg(test)]
-    mod test {
-        use super::*;
-        use coord_2d::{Coord, Size};
-        use std::collections::HashSet;
-        #[test]
-        fn tiling() {
-            let grid = Grid::new_fn(Size::new(4, 4), |coord| coord);
-            let slice = new(&grid, Coord::new(-1, -1), Size::new(2, 2));
-            let value = *slice.get(Coord::new(0, 1)).unwrap();
-            assert_eq!(value, Coord::new(3, 0));
-        }
-        #[test]
-        fn tiled_grid_slice_hash() {
-            let mut grid = Grid::new_fn(Size::new(4, 4), |_| 0);
-            *grid.get_mut(Coord::new(3, 3)).unwrap() = 1;
-            let size = Size::new(2, 2);
-            let a = new(&grid, Coord::new(0, 0), size);
-            let b = new(&grid, Coord::new(2, 2), size);
-            let c = new(&grid, Coord::new(0, 2), size);
-            let mut set = HashSet::new();
-            set.insert(a);
-            set.insert(b);
-            set.insert(c);
-            assert_eq!(set.len(), 2);
-        }
-    }
-}
-
+use context::*;
 use coord_2d::{Coord, Size};
-use direction::{CardinalDirection, CardinalDirectionTable, CardinalDirections};
+use direction::{CardinalDirection, CardinalDirectionTable};
 use grid_2d::coord_system::XThenYIter;
 use grid_2d::Grid;
 use hashbrown::HashMap;
 use image::{DynamicImage, Rgb, RgbImage};
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
 use tiled_slice::*;
 
 pub fn are_patterns_compatible(
@@ -334,371 +216,6 @@ impl PatternTable {
     }
 }
 
-#[derive(PartialEq, Debug)]
-struct EntropyWithNoise {
-    entropy: f32,
-    noise: u32,
-}
-
-impl Eq for EntropyWithNoise {}
-
-impl PartialOrd for EntropyWithNoise {
-    fn partial_cmp(&self, other: &Self) -> Option<::std::cmp::Ordering> {
-        match self.entropy.partial_cmp(&other.entropy) {
-            Some(Ordering::Equal) => self.noise.partial_cmp(&other.noise),
-            other_ordering => other_ordering,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct CellMetadata {
-    num_possible_patterns: u32,
-    // n0 + n1 + n2 + ...
-    sum_possible_pattern_count: u32,
-    // n0*log(n0) + n1*log(n1) + n2*log(n2) + ...
-    sum_possible_pattern_count_log_count: f32,
-}
-
-impl CellMetadata {
-    fn remove_possible_pattern(&mut self, pattern: &Pattern) {
-        assert!(
-            pattern.count < self.sum_possible_pattern_count,
-            "Should never remove the last pattern of a cell"
-        );
-        self.num_possible_patterns -= 1;
-        self.sum_possible_pattern_count -= pattern.count;
-        self.sum_possible_pattern_count_log_count -= pattern.count_log_count;
-    }
-    fn entropy(&self) -> f32 {
-        // log(n0+n1+n2+...) - (n0*log(n0) + n1*log(n1) + n2*log(n2) + ...) / (n0+n1+n2+...)
-        let sum_possible_pattern_count = self.sum_possible_pattern_count as f32;
-        sum_possible_pattern_count.log2()
-            - (self.sum_possible_pattern_count_log_count / sum_possible_pattern_count)
-    }
-}
-
-#[derive(Debug)]
-pub struct Cell {
-    possible_pattern_ids: Vec<bool>,
-    metadata: CellMetadata,
-    noise: u32,
-}
-
-impl Cell {
-    fn new<R: Rng>(pattern_table: &PatternTable, rng: &mut R) -> Self {
-        let possible_pattern_ids = pattern_table.patterns.iter().map(|_| true).collect();
-        let num_possible_patterns = pattern_table.patterns.len() as u32;
-        let sum_possible_pattern_count = pattern_table.sum_pattern_count;
-        let sum_possible_pattern_count_log_count =
-            pattern_table.sum_pattern_count_log_count;
-        Self {
-            possible_pattern_ids,
-            noise: rng.gen(),
-            metadata: CellMetadata {
-                num_possible_patterns,
-                sum_possible_pattern_count,
-                sum_possible_pattern_count_log_count,
-            },
-        }
-    }
-    fn remove_possible_pattern(
-        &mut self,
-        pattern_id: PatternId,
-        pattern_table: &PatternTable,
-    ) {
-        assert!(self.metadata.num_possible_patterns > 1);
-        let possible_pattern_id = &mut self.possible_pattern_ids[pattern_id as usize];
-        if !*possible_pattern_id {
-            return;
-        }
-        *possible_pattern_id = false;
-        self.metadata
-            .remove_possible_pattern(&pattern_table.patterns[pattern_id as usize]);
-    }
-    fn chosen_pattern_id(&self) -> PatternId {
-        self.possible_pattern_ids
-            .iter()
-            .position(Clone::clone)
-            .unwrap() as PatternId
-    }
-    fn choose_pattern_id<R: Rng>(
-        &self,
-        pattern_table: &PatternTable,
-        rng: &mut R,
-    ) -> PatternId {
-        assert!(self.metadata.num_possible_patterns > 1);
-        let mut remaining = rng.gen_range(0, self.metadata.sum_possible_pattern_count);
-        for (pattern_id, pattern) in self.possible_pattern_ids
-            .iter()
-            .zip(pattern_table.patterns.iter().enumerate())
-            .filter_map(|(&is_possible, pattern)| {
-                if is_possible {
-                    Some(pattern)
-                } else {
-                    None
-                }
-            }) {
-            if pattern.count < remaining {
-                remaining -= pattern.count;
-            } else {
-                return pattern_id as PatternId;
-            }
-        }
-        unreachable!("possible patterns inconsistent with pattern table");
-    }
-    fn is_decided(&self) -> bool {
-        self.metadata.num_possible_patterns == 1
-    }
-    fn entropy_with_noise(&self) -> EntropyWithNoise {
-        assert!(self.metadata.num_possible_patterns > 1);
-        let entropy = self.metadata.entropy();
-        let noise = self.noise;
-        EntropyWithNoise { entropy, noise }
-    }
-}
-
-#[derive(Debug)]
-struct RemovedPattern {
-    coord: Coord,
-    pattern_id: PatternId,
-}
-
-#[derive(Debug)]
-struct Propagator {
-    remaining_ways_to_become_pattern: Grid<Vec<CardinalDirectionTable<u32>>>,
-    removed_patterns_to_propagate: Vec<RemovedPattern>,
-    next_entropies: HashMap<Coord, EntropyWithNoise>,
-}
-
-impl Propagator {
-    fn new(
-        size: Size,
-        compatibility: &Vec<CardinalDirectionTable<Vec<PatternId>>>,
-    ) -> Self {
-        let initial_ways_to_become_pattern = compatibility
-            .iter()
-            .map(|compatible_patterns_per_direction| {
-                let mut num_ways_to_become_pattern_from_direction =
-                    CardinalDirectionTable::default();
-                for direction in direction::CardinalDirections {
-                    *num_ways_to_become_pattern_from_direction.get_mut(direction) =
-                        compatible_patterns_per_direction
-                            .get(direction.opposite())
-                            .len() as u32;
-                }
-                num_ways_to_become_pattern_from_direction
-            })
-            .collect::<Vec<_>>();
-        let remaining_ways_to_become_pattern =
-            Grid::new_fn(size, |_| initial_ways_to_become_pattern.clone());
-
-        Self {
-            remaining_ways_to_become_pattern,
-            removed_patterns_to_propagate: Vec::new(),
-            next_entropies: HashMap::default(),
-        }
-    }
-
-    fn add(&mut self, coord: Coord, pattern_id: PatternId) {
-        self.removed_patterns_to_propagate
-            .push(RemovedPattern {
-                coord,
-                pattern_id,
-            });
-        self.remaining_ways_to_become_pattern
-            .tiled_get_mut(coord)[pattern_id as usize]
-            .iter_mut()
-            .for_each(|c| *c = 0);
-    }
-
-    fn propagate(
-        &mut self,
-        compatibility: &Vec<CardinalDirectionTable<Vec<PatternId>>>,
-        pattern_table: &PatternTable,
-        output_grid: &mut Grid<Cell>,
-        entropy_priority_queue: &mut BinaryHeap<CoordEntropy>,
-        num_undecided_cells: &mut u32,
-    ) {
-        while let Some(removed_pattern) = self.removed_patterns_to_propagate.pop() {
-            for direction in CardinalDirections {
-                let coord_to_update = removed_pattern.coord + direction.coord();
-                let remaining = self.remaining_ways_to_become_pattern
-                    .tiled_get_mut(coord_to_update);
-                for &pattern_id in compatibility[removed_pattern.pattern_id as usize]
-                    .get(direction)
-                    .iter()
-                {
-                    let remaining = &mut remaining[pattern_id as usize];
-                    let count = {
-                        let count = remaining.get_mut(direction);
-                        if *count == 0 {
-                            continue;
-                        }
-                        *count -= 1;
-                        *count
-                    };
-                    if count == 0 {
-                        let size = output_grid.size();
-                        let cell = output_grid.tiled_get_mut(coord_to_update);
-                        cell.remove_possible_pattern(pattern_id, pattern_table);
-
-                        if cell.is_decided() {
-                            *num_undecided_cells -= 1;
-                            self.next_entropies.remove(&coord_to_update);
-                        } else {
-                            self.next_entropies.insert(
-                                coord_to_update.normalize(size),
-                                cell.entropy_with_noise(),
-                            );
-                        }
-
-                        self.removed_patterns_to_propagate
-                            .push(RemovedPattern {
-                                coord: coord_to_update,
-                                pattern_id,
-                            });
-                        remaining.iter_mut().for_each(|c| *c = 0);
-                    }
-                }
-            }
-        }
-        for (coord, entropy_with_noise) in self.next_entropies.drain() {
-            entropy_priority_queue.push(CoordEntropy {
-                coord,
-                entropy_with_noise,
-            });
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Debug)]
-struct CoordEntropy {
-    coord: Coord,
-    entropy_with_noise: EntropyWithNoise,
-}
-
-impl PartialOrd for CoordEntropy {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other
-            .entropy_with_noise
-            .partial_cmp(&self.entropy_with_noise)
-    }
-}
-
-impl Ord for CoordEntropy {
-    fn cmp(&self, other: &Self) -> Ordering {
-        if self < other {
-            return Ordering::Less;
-        }
-        if self == other {
-            return Ordering::Equal;
-        }
-        return Ordering::Greater;
-    }
-}
-
-struct Observer {
-    grid: Grid<Cell>,
-    entropy_priority_queue: BinaryHeap<CoordEntropy>,
-    num_undecided_cells: u32,
-}
-
-enum NextCellChoice<'a> {
-    MinEntropyCell { cell: &'a mut Cell, coord: Coord },
-    Complete,
-}
-
-enum Observation {
-    Complete,
-    Incomplete,
-}
-
-type PatternId = u32;
-
-impl Observer {
-    fn new<R: Rng>(size: Size, pattern_table: &PatternTable, rng: &mut R) -> Self {
-        let grid = Grid::new_fn(size, |_| Cell::new(&pattern_table, rng));
-        let entropy_priority_queue = grid.enumerate()
-            .map(|(coord, cell)| CoordEntropy {
-                coord,
-                entropy_with_noise: cell.entropy_with_noise(),
-            })
-            .collect();
-        let num_undecided_cells = size.count() as u32;
-        Self {
-            grid,
-            entropy_priority_queue,
-            num_undecided_cells,
-        }
-    }
-
-    fn choose_next_cell(&mut self) -> NextCellChoice {
-        while let Some(coord_entropy) = self.entropy_priority_queue.pop() {
-            if !self.grid
-                .get(coord_entropy.coord)
-                .unwrap()
-                .is_decided()
-            {
-                let cell = self.grid.get_mut(coord_entropy.coord).unwrap();
-                return NextCellChoice::MinEntropyCell {
-                    coord: coord_entropy.coord,
-                    cell,
-                };
-            }
-        }
-        NextCellChoice::Complete
-    }
-
-    fn observe<R: Rng>(
-        &mut self,
-        pattern_table: &PatternTable,
-        propagator: &mut Propagator,
-        rng: &mut R,
-    ) -> Observation {
-        if self.num_undecided_cells == 0 {
-            return Observation::Complete;
-        }
-        {
-            let (cell, coord) = match self.choose_next_cell() {
-                NextCellChoice::Complete => return Observation::Complete,
-                NextCellChoice::MinEntropyCell { cell, coord } => (cell, coord),
-            };
-            let chosen_pattern_id = cell.choose_pattern_id(pattern_table, rng);
-
-            for ((pattern_id, is_possible), pattern) in cell.possible_pattern_ids
-                .iter_mut()
-                .enumerate()
-                .zip(pattern_table.patterns.iter())
-            {
-                if pattern_id as PatternId != chosen_pattern_id {
-                    if *is_possible {
-                        *is_possible = false;
-                        cell.metadata.remove_possible_pattern(pattern);
-                        propagator.add(coord, pattern_id as PatternId);
-                    }
-                }
-            }
-        }
-        self.num_undecided_cells -= 1;
-        Observation::Incomplete
-    }
-
-    fn output(
-        &self,
-        size: Size,
-        pattern_table: &PatternTable,
-        input_grid: &Grid<Colour>,
-    ) -> Grid<Colour> {
-        Grid::new_fn(size, |coord| {
-            let cell = self.grid.get(coord).unwrap();
-            let pattern_id = cell.chosen_pattern_id();
-            let colour = pattern_table.colour(pattern_id, input_grid);
-            colour
-        })
-    }
-}
-
 fn fixed_rng() -> XorShiftRng {
     XorShiftRng::from_seed([0; 16])
 }
@@ -723,8 +240,13 @@ fn main() {
         .collect::<Vec<_>>();
 
     let pattern_table = PatternTable::new(patterns);
+    let stats_per_pattern = pattern_table
+        .patterns
+        .iter()
+        .map(|p| PatternStats::new(p.count))
+        .collect::<context::PatternTable<_>>();
 
-    let compatibility_table = pattern_table
+    let compatibility_per_pattern = pattern_table
         .patterns
         .iter()
         .map(|a_info| {
@@ -748,31 +270,25 @@ fn main() {
             }
             direction_table
         })
-        .collect::<Vec<_>>();
-
-    let mut propagator = Propagator::new(output_size, &compatibility_table);
-    let mut observer = Observer::new(output_size, &pattern_table, &mut rng);
-
-    loop {
-        let observation = observer.observe(&pattern_table, &mut propagator, &mut rng);
-        match observation {
-            Observation::Complete => {
-                break;
+        .collect::<context::PatternTable<_>>();
+    let output = {
+        let global_stats = GlobalStats::new(stats_per_pattern, compatibility_per_pattern);
+        let mut context = Context::new(output_size);
+        {
+            let mut run = context.run(&global_stats, &mut rng);
+            loop {
+                match run.step() {
+                    Step::Complete => break,
+                    Step::Incomplete => (),
+                }
             }
-            Observation::Incomplete => propagator.propagate(
-                &compatibility_table,
-                &pattern_table,
-                &mut observer.grid,
-                &mut observer.entropy_priority_queue,
-                &mut observer.num_undecided_cells,
-            ),
         }
-    }
-
+        Grid::new_fn(context.size(), |coord| {
+            let pattern_id = context.get_pattern_id(coord).unwrap();
+            pattern_table.colour(pattern_id, &image_grid.grid)
+        })
+    };
     println!("{:?}", ::std::time::Instant::now() - start_time);
-    let output = observer.output(output_size, &pattern_table, &image_grid.grid);
-
     let output_image = ImageGrid { grid: output };
-
     output_image.to_image().save("/tmp/a.png").unwrap();
 }
