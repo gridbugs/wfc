@@ -38,10 +38,7 @@ pub fn are_patterns_compatible(
     let b_overlap = b + b_offset;
     let a_slice = tiled_slice::new(grid, a_overlap, overlap_size);
     let b_slice = tiled_slice::new(grid, b_overlap, overlap_size);
-    a_slice
-        .iter()
-        .zip(b_slice.iter())
-        .all(|(a, b)| a == b)
+    a_slice.iter().zip(b_slice.iter()).all(|(a, b)| a == b)
 }
 
 #[cfg(test)]
@@ -52,16 +49,8 @@ mod pattern_test {
     use grid_2d::Grid;
     #[test]
     fn compatibile_patterns() {
-        let r = Colour {
-            r: 255,
-            g: 0,
-            b: 0,
-        };
-        let b = Colour {
-            r: 0,
-            g: 0,
-            b: 255,
-        };
+        let r = Colour { r: 255, g: 0, b: 0 };
+        let b = Colour { r: 0, g: 0, b: 255 };
         let array = [[r, b, b], [b, r, b]];
         let grid = Grid::new_fn(Size::new(3, 2), |coord| {
             array[coord.y as usize][coord.x as usize]
@@ -134,10 +123,9 @@ impl ImageGrid {
     pub fn from_image(image: &DynamicImage) -> Self {
         let rgb_image = image.to_rgb();
         let size = Size::new(rgb_image.width(), rgb_image.height());
-        let grid = Grid::new_fn(
-            size,
-            |Coord { x, y }| Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32)),
-        );
+        let grid = Grid::new_fn(size, |Coord { x, y }| {
+            Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32))
+        });
         Self { grid }
     }
     pub fn to_image(&self) -> DynamicImage {
@@ -275,7 +263,7 @@ fn main() {
         let global_stats = GlobalStats::new(stats_per_pattern, compatibility_per_pattern);
         let mut context = Context::new(output_size);
         {
-            let mut run = context.run(&global_stats, &mut rng);
+            let mut run = context.run(&global_stats, WrapNone, &mut rng);
             loop {
                 match run.step() {
                     Step::Complete => break,

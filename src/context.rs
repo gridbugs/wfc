@@ -9,6 +9,66 @@ use std::iter;
 use std::ops::{Index, IndexMut};
 use std::slice;
 
+pub trait OutputWrap {
+    fn normalize_coord(coord: Coord, size: Size) -> Option<Coord>;
+}
+
+pub struct WrapNone;
+pub struct WrapX;
+pub struct WrapY;
+pub struct WrapXY;
+
+impl OutputWrap for WrapNone {
+    fn normalize_coord(coord: Coord, size: Size) -> Option<Coord> {
+        if coord.is_valid(size) {
+            Some(coord)
+        } else {
+            None
+        }
+    }
+}
+
+fn value_is_valid(value: i32, size: u32) -> bool {
+    value >= 0 && (value as u32) < size
+}
+
+fn normalize_value(value: i32, size: u32) -> i32 {
+    let value = value % size as i32;
+    if value < 0 {
+        value + size as i32
+    } else {
+        value
+    }
+}
+
+impl OutputWrap for WrapX {
+    fn normalize_coord(coord: Coord, size: Size) -> Option<Coord> {
+        if value_is_valid(coord.y, size.y()) {
+            let x = normalize_value(coord.x, size.x());
+            Some(Coord::new(x, coord.y))
+        } else {
+            None
+        }
+    }
+}
+
+impl OutputWrap for WrapXY {
+    fn normalize_coord(coord: Coord, size: Size) -> Option<Coord> {
+        Some(coord.normalize(size))
+    }
+}
+
+impl OutputWrap for WrapY {
+    fn normalize_coord(coord: Coord, size: Size) -> Option<Coord> {
+        if value_is_valid(coord.x, size.x()) {
+            let y = normalize_value(coord.y, size.y());
+            Some(Coord::new(coord.x, y))
+        } else {
+            None
+        }
+    }
+}
+
 pub type PatternId = u32;
 
 #[derive(Default, Clone)]
@@ -76,10 +136,8 @@ impl GlobalStats {
         compatibility_per_pattern: PatternTable<CardinalDirectionTable<Vec<PatternId>>>,
     ) -> Self {
         let sum_pattern_count = stats_per_pattern.iter().map(|p| p.count).sum();
-        let sum_pattern_count_log_count = stats_per_pattern
-            .iter()
-            .map(|p| p.count_log_count)
-            .sum();
+        let sum_pattern_count_log_count =
+            stats_per_pattern.iter().map(|p| p.count_log_count).sum();
         Self {
             stats_per_pattern,
             compatibility_per_pattern,
@@ -95,7 +153,7 @@ impl GlobalStats {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 struct EntropyWithNoise {
     entropy: f32,
     noise: u32,
@@ -190,16 +248,19 @@ impl WaveCell {
     ) -> PatternId {
         assert!(self.metadata.num_possible_patterns > 1);
         let mut remaining = rng.gen_range(0, self.metadata.sum_possible_pattern_count);
-        for (pattern_id, pattern) in self.possible_pattern_ids
+        for (pattern_id, pattern) in self
+            .possible_pattern_ids
             .iter()
             .zip(global_stats.stats_iter().enumerate())
-            .filter_map(|(&is_possible, pattern)| {
-                if is_possible {
-                    Some(pattern)
-                } else {
-                    None
-                }
-            }) {
+            .filter_map(
+                |(&is_possible, pattern)| {
+                    if is_possible {
+                        Some(pattern)
+                    } else {
+                        None
+                    }
+                },
+            ) {
             if pattern.count < remaining {
                 remaining -= pattern.count;
             } else {
@@ -245,11 +306,6 @@ impl Ord for CoordEntropy {
     }
 }
 
-enum Observation {
-    Complete,
-    Incomplete,
-}
-
 pub enum Step {
     Complete,
     Incomplete,
@@ -268,17 +324,15 @@ struct Propagator {
     removed_patterns_to_propagate: Vec<RemovedPattern>,
 }
 
+const ZERO_CARDINAL_DIRECTION_TABLE: CardinalDirectionTable<u32> =
+    CardinalDirectionTable::new_array([0, 0, 0, 0]);
+
 impl Propagator {
-    fn add(&mut self, coord: Coord, pattern_id: PatternId) {
+    fn add2(&mut self, coord: Coord, pattern_id: PatternId) {
         self.removed_patterns_to_propagate
-            .push(RemovedPattern {
-                coord,
-                pattern_id,
-            });
-        self.remaining_ways_to_become_pattern
-            .tiled_get_mut(coord)[pattern_id]
-            .iter_mut()
-            .for_each(|c| *c = 0);
+            .push(RemovedPattern { coord, pattern_id });
+        self.remaining_ways_to_become_pattern.get_checked_mut(coord)[pattern_id] =
+            ZERO_CARDINAL_DIRECTION_TABLE;
     }
 }
 
@@ -290,11 +344,7 @@ struct Observer {
 impl Observer {
     fn choose_next_cell(&mut self) -> NextCellChoice {
         while let Some(coord_entropy) = self.entropy_priority_queue.pop() {
-            if !self.wave
-                .get(coord_entropy.coord)
-                .unwrap()
-                .is_decided()
-            {
+            if !self.wave.get(coord_entropy.coord).unwrap().is_decided() {
                 let wave_cell = self.wave.get_mut(coord_entropy.coord).unwrap();
                 return NextCellChoice::MinEntropyCell {
                     coord: coord_entropy.coord,
@@ -374,25 +424,18 @@ impl Context {
         self.num_undecided_cells = self.observer.wave.size().count() as u32;
     }
     pub fn get_pattern_id(&self, coord: Coord) -> Option<PatternId> {
-        self.observer
-            .wave
-            .get_checked(coord)
-            .chosen_pattern_id()
+        self.observer.wave.get_checked(coord).chosen_pattern_id()
     }
     pub fn size(&self) -> Size {
         self.observer.wave.size()
     }
-    fn observe<R: Rng>(
-        &mut self,
-        global_stats: &GlobalStats,
-        rng: &mut R,
-    ) -> Observation {
+    fn observe<R: Rng>(&mut self, global_stats: &GlobalStats, rng: &mut R) -> Step {
         if self.num_undecided_cells == 0 {
-            return Observation::Complete;
+            return Step::Complete;
         }
         {
             let (wave_cell, coord) = match self.observer.choose_next_cell() {
-                NextCellChoice::Complete => return Observation::Complete,
+                NextCellChoice::Complete => return Step::Complete,
                 NextCellChoice::MinEntropyCell { wave_cell, coord } => (wave_cell, coord),
             };
             let chosen_pattern_id = wave_cell.choose_pattern_id(global_stats, rng);
@@ -406,27 +449,34 @@ impl Context {
                 if pattern_id as PatternId != chosen_pattern_id {
                     if *is_possible {
                         *is_possible = false;
-                        wave_cell
-                            .metadata
-                            .remove_possible_pattern(pattern_stats);
-                        self.propagator.add(coord, pattern_id as PatternId);
+                        wave_cell.metadata.remove_possible_pattern(pattern_stats);
+                        self.propagator.add2(coord, pattern_id as PatternId);
                     }
                 }
             }
         }
         self.num_undecided_cells -= 1;
-        Observation::Incomplete
+        Step::Incomplete
     }
 
-    fn propagate(&mut self, global_stats: &GlobalStats) {
+    fn propagate<W: OutputWrap>(&mut self, global_stats: &GlobalStats) {
         while let Some(removed_pattern) =
             self.propagator.removed_patterns_to_propagate.pop()
         {
+            let wave_size = self.observer.wave.size();
             for direction in CardinalDirections {
-                let coord_to_update = removed_pattern.coord + direction.coord();
-                let remaining = self.propagator
+                let coord_to_update = if let Some(coord_to_update) = W::normalize_coord(
+                    removed_pattern.coord + direction.coord(),
+                    wave_size,
+                ) {
+                    coord_to_update
+                } else {
+                    continue;
+                };
+                let remaining = self
+                    .propagator
                     .remaining_ways_to_become_pattern
-                    .tiled_get_mut(coord_to_update);
+                    .get_checked_mut(coord_to_update);
                 for &pattern_id in global_stats.compatibility_per_pattern
                     [removed_pattern.pattern_id]
                     .get(direction)
@@ -442,18 +492,22 @@ impl Context {
                         *count
                     };
                     if count == 0 {
-                        let size = self.observer.wave.size();
-                        let cell = self.observer.wave.tiled_get_mut(coord_to_update);
+                        let cell = self.observer.wave.get_checked_mut(coord_to_update);
                         cell.remove_possible_pattern(pattern_id, global_stats);
 
                         if cell.is_decided() {
                             self.num_undecided_cells -= 1;
                             self.next_entropies.remove(&coord_to_update);
                         } else {
-                            self.next_entropies.insert(
-                                coord_to_update.normalize(size),
-                                cell.entropy_with_noise(),
-                            );
+                            let noise = cell.entropy_with_noise();
+                            self.next_entropies
+                                .entry(coord_to_update)
+                                .and_modify(|existing_noise| {
+                                    if noise < *existing_noise {
+                                        *existing_noise = noise;
+                                    }
+                                })
+                                .or_insert(noise);
                         }
 
                         self.propagator.removed_patterns_to_propagate.push(
@@ -462,51 +516,84 @@ impl Context {
                                 pattern_id,
                             },
                         );
-                        remaining.iter_mut().for_each(|c| *c = 0);
+                        *remaining = ZERO_CARDINAL_DIRECTION_TABLE;
                     }
                 }
             }
         }
         for (coord, entropy_with_noise) in self.next_entropies.drain() {
-            self.observer
-                .entropy_priority_queue
-                .push(CoordEntropy {
-                    coord,
-                    entropy_with_noise,
-                });
+            self.observer.entropy_priority_queue.push(CoordEntropy {
+                coord,
+                entropy_with_noise,
+            });
         }
     }
-    fn step<R: Rng>(&mut self, global_stats: &GlobalStats, rng: &mut R) -> Step {
-        match self.observe(global_stats, rng) {
-            Observation::Complete => Step::Complete,
-            Observation::Incomplete => {
-                self.propagate(global_stats);
-                Step::Incomplete
-            }
-        }
+    fn step<W: OutputWrap, R: Rng>(
+        &mut self,
+        global_stats: &GlobalStats,
+        rng: &mut R,
+    ) -> Step {
+        self.propagate::<W>(global_stats);
+        self.observe(global_stats, rng)
     }
-    pub fn run<'a, 'b, 'c, R: Rng>(
+    pub fn run<'a, W: OutputWrap, R: Rng>(
         &'a mut self,
-        global_stats: &'b GlobalStats,
-        rng: &'c mut R,
-    ) -> Run<'a, 'b, 'c, R> {
+        global_stats: &'a GlobalStats,
+        output_wrap: W,
+        rng: &'a mut R,
+    ) -> Run<'a, W, R> {
         self.init(global_stats, rng);
         Run {
             context: self,
             global_stats,
             rng,
+            output_wrap,
         }
     }
 }
 
-pub struct Run<'a, 'b, 'c, R: 'c + Rng> {
+pub struct Run<'a, W: OutputWrap, R: 'a + Rng> {
     context: &'a mut Context,
-    global_stats: &'b GlobalStats,
-    rng: &'c mut R,
+    global_stats: &'a GlobalStats,
+    rng: &'a mut R,
+    output_wrap: W,
 }
 
-impl<'a, 'b, 'c, R: Rng> Run<'a, 'b, 'c, R> {
+impl<'a, W: OutputWrap, R: Rng> Run<'a, W, R> {
     pub fn step(&mut self) -> Step {
-        self.context.step(self.global_stats, self.rng)
+        self.context.step::<W, _>(self.global_stats, self.rng)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn wraps() {
+        assert_eq! {
+            WrapNone::normalize_coord(Coord::new(2, 3), Size::new(4, 5)),
+            Some(Coord::new(2, 3))
+        };
+        assert_eq! {
+            WrapNone::normalize_coord(Coord::new(4, 3), Size::new(4, 5)),
+            None,
+        };
+        assert_eq! {
+            WrapX::normalize_coord(Coord::new(4, 3), Size::new(4, 5)),
+            Some(Coord::new(0, 3)),
+        };
+        assert_eq! {
+            WrapY::normalize_coord(Coord::new(4, 3), Size::new(4, 5)),
+            None,
+        };
+        assert_eq! {
+            WrapY::normalize_coord(Coord::new(2, 6), Size::new(4, 5)),
+            Some(Coord::new(2, 1)),
+        };
+        assert_eq! {
+            WrapXY::normalize_coord(Coord::new(2, 6), Size::new(4, 5)),
+            Some(Coord::new(2, 1)),
+        };
     }
 }

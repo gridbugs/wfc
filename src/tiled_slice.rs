@@ -8,11 +8,7 @@ pub fn new<'a, T, S: CoordSystem + Clone>(
     offset: Coord,
     size: Size,
 ) -> TiledGridSlice<'a, T, S> {
-    TiledGridSlice {
-        grid,
-        offset,
-        size,
-    }
+    TiledGridSlice { grid, offset, size }
 }
 
 #[derive(Clone)]
@@ -36,7 +32,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.coord_iter
             .next()
-            .map(|coord| self.grid.tiled_get(self.offset + coord))
+            .map(|coord| self.grid.get_tiled(self.offset + coord))
     }
 }
 
@@ -49,7 +45,7 @@ where
     }
     pub fn get(&self, coord: Coord) -> Option<&T> {
         if coord.is_valid(self.size) {
-            Some(self.grid.tiled_get(self.offset + coord))
+            Some(self.grid.get_tiled(self.offset + coord))
         } else {
             None
         }
@@ -82,11 +78,7 @@ where
         self.size == other.size && self.iter().zip(other.iter()).all(|(s, o)| s.eq(o))
     }
 }
-impl<'a, T: Eq, S> Eq for TiledGridSlice<'a, T, S>
-where
-    S: CoordSystem + Clone,
-{
-}
+impl<'a, T: Eq, S> Eq for TiledGridSlice<'a, T, S> where S: CoordSystem + Clone {}
 
 #[cfg(test)]
 mod test {
