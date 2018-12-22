@@ -326,8 +326,8 @@ fn main() {
     let output = {
         let global_stats = GlobalStats::new(stats_per_pattern, compatibility_per_pattern);
         let mut wave = Wave::new(output_size);
-        let mut context = Context::new();
-        {
+        'generate: loop {
+            let mut context = Context::new();
             let mut run = context.run::<WrapXY, _>(&mut wave, &global_stats, &mut rng);
             let sprout_coord = Coord::new(
                 (rng.gen::<u32>() % output_size.width()) as i32,
@@ -340,16 +340,14 @@ fn main() {
                 let coord = Coord::new(i, output_size.height() as i32 - 1);
                 run.set_pattern(coord, bottom_left_corner_id);
             }
-            /*
-            for _ in 0..61 {
-                run.step(&mut rng);
-            }*/
-            //run._debug();
-            //
             'steps: loop {
                 match run.step(&mut rng) {
-                    Progress::Complete => break,
-                    Progress::Incomplete => (),
+                    Err(Error::Contradiction) => {
+                        println!("Contradiction");
+                        continue 'generate;
+                    }
+                    Ok(Progress::Complete) => break 'generate,
+                    Ok(Progress::Incomplete) => (),
                 }
             }
         }

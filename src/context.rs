@@ -207,6 +207,9 @@ impl WaveCell {
                 if let Some(pattern_stats) = global_stats.pattern_stats(pattern_id) {
                     self.stats.remove_compatible_pattern(pattern_stats);
                     match self.stats.num_weighted_compatible_patterns {
+                        // Someday it might be worth distinguishing between the case where
+                        // there are no candidates, and the case where all candidates have
+                        // zero weight (meaning they won't be automatically chosen).
                         0 => Contradiction,
                         non_zero => {
                             assert!(self.num_compatible_patterns != 0);
@@ -312,6 +315,8 @@ struct Propagator {
     removed_patterns_to_propagate: Vec<RemovedPattern>,
 }
 
+struct Contradiction;
+
 impl Propagator {
     fn clear(&mut self) {
         self.removed_patterns_to_propagate.clear();
@@ -322,8 +327,7 @@ impl Propagator {
         global_stats: &GlobalStats,
         entropy_changes_by_coord: &mut HashMap<Coord, EntropyWithNoise>,
         num_cells_with_more_than_one_weighted_compatible_pattern: &mut u32,
-        contradictions: &mut Vec<Coord>,
-    ) {
+    ) -> Result<(), Contradiction> {
         entropy_changes_by_coord.clear();
         let wave_size = wave.size();
         while let Some(removed_pattern) = self.removed_patterns_to_propagate.pop() {
@@ -366,8 +370,7 @@ impl Propagator {
                             entropy_changes_by_coord.remove(&coord_to_update);
                         }
                         D::Contradiction => {
-                            contradictions.push(coord_to_update);
-                            entropy_changes_by_coord.remove(&coord_to_update);
+                            return Err(Contradiction);
                         }
                     }
                     self.removed_patterns_to_propagate
@@ -378,6 +381,7 @@ impl Propagator {
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -490,12 +494,15 @@ pub struct Context {
     entropy_changes_by_coord: HashMap<Coord, EntropyWithNoise>,
     observer: Observer,
     num_cells_with_more_than_one_weighted_compatible_pattern: u32,
-    contradictions: Vec<Coord>,
 }
 
 pub enum Progress {
     Incomplete,
     Complete,
+}
+
+pub enum Error {
+    Contradiction,
 }
 
 impl Context {
@@ -506,7 +513,6 @@ impl Context {
         self.propagator.clear();
         self.observer.clear();
         self.entropy_changes_by_coord.clear();
-        self.contradictions.clear();
         if global_stats.num_weighted_patterns() > 1 {
             self.num_cells_with_more_than_one_weighted_compatible_pattern =
                 wave.size().count() as u32;
@@ -522,14 +528,17 @@ impl Context {
             self.num_cells_with_more_than_one_weighted_compatible_pattern = 0;
         }
     }
-    fn propagate<W: OutputWrap>(&mut self, wave: &mut Wave, global_stats: &GlobalStats) {
+    fn propagate<W: OutputWrap>(
+        &mut self,
+        wave: &mut Wave,
+        global_stats: &GlobalStats,
+    ) -> Result<(), Contradiction> {
         self.propagator.propagate::<W>(
             wave,
             global_stats,
             &mut self.entropy_changes_by_coord,
             &mut self.num_cells_with_more_than_one_weighted_compatible_pattern,
-            &mut self.contradictions,
-        );
+        )?;
         for (coord, entropy_with_noise) in self.entropy_changes_by_coord.drain() {
             self.observer
                 .entropy_priority_queue
@@ -538,6 +547,7 @@ impl Context {
                     entropy_with_noise,
                 });
         }
+        Ok(())
     }
     fn observe<R: Rng>(
         &mut self,
@@ -570,9 +580,9 @@ impl Context {
         wave: &mut Wave,
         global_stats: &GlobalStats,
         rng: &mut R,
-    ) -> Progress {
-        self.propagate::<W>(wave, global_stats);
-        self.observe(wave, global_stats, rng)
+    ) -> Result<Progress, Contradiction> {
+        self.propagate::<W>(wave, global_stats)?;
+        Ok(self.observe(wave, global_stats, rng))
     }
     fn set_pattern(
         &mut self,
@@ -606,17 +616,14 @@ pub struct Run<'a, W: OutputWrap> {
 }
 
 impl<'a, W: OutputWrap> Run<'a, W> {
-    pub fn step<R: Rng>(&mut self, rng: &mut R) -> Progress {
+    pub fn step<R: Rng>(&mut self, rng: &mut R) -> Result<Progress, Error> {
         self.context
             .step::<W, _>(self.wave, self.global_stats, rng)
+            .map_err(|_: Contradiction| Error::Contradiction)
     }
     pub fn set_pattern(&mut self, coord: Coord, pattern_id: PatternId) {
         self.context
             .set_pattern(coord, &mut self.wave, pattern_id, self.global_stats);
-    }
-    pub fn _propagate(&mut self) {
-        self.context
-            .propagate::<W>(self.wave, self.global_stats);
     }
     pub fn new<R: Rng>(
         context: &'a mut Context,
