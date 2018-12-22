@@ -329,7 +329,7 @@ fn main() {
         let mut wave = Wave::new(output_size);
         'generate: loop {
             let mut context = Context::new();
-            let mut run = Run::new(
+            let mut wfc = Ready::new(
                 &mut context,
                 &mut wave,
                 &global_stats,
@@ -341,34 +341,34 @@ fn main() {
                 output_size.height() as i32 - 2,
             );
 
-            run.wave_cell_handle(sprout_coord)
-                .choose_pattern(sprout_id)
-                .unwrap();
+            wfc = wfc.with_wave_cell_handle(sprout_coord, |mut handle| {
+                handle.choose_pattern(sprout_id).unwrap()
+            }).unwrap();
 
             for i in 0..(output_size.width() as i32) {
                 let coord = Coord::new(i, output_size.height() as i32 - 1);
-                run.wave_cell_handle(coord)
-                    .choose_pattern(bottom_left_corner_id)
-                    .unwrap();
+                wfc = wfc.with_wave_cell_handle(coord, |mut handle| {
+                    handle.choose_pattern(bottom_left_corner_id).unwrap()
+                }).unwrap();
             }
 
             for i in 0..8 {
                 for j in 0..(output_size.width() as i32) {
                     let coord = Coord::new(j, output_size.height() as i32 - 1 - i);
-                    run.wave_cell_handle(coord)
-                        .forbid_pattern(flower_id)
-                        .unwrap();
+                    wfc = wfc.with_wave_cell_handle(coord, |mut handle| {
+                        handle.forbid_pattern(flower_id).unwrap();
+                    }).unwrap();
                 }
             }
 
             'steps: loop {
-                match run.step(&mut rng) {
+                wfc = match wfc.step(&mut rng) {
                     Err(PropagateError::Contradiction) => {
                         println!("Contradiction");
                         continue 'generate;
                     }
-                    Ok(Observe::Complete) => break 'generate,
-                    Ok(Observe::Incomplete) => (),
+                    Ok(Step::Complete) => break 'generate,
+                    Ok(Step::Incomplete(wfc)) => wfc,
                 }
             }
         }

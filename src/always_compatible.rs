@@ -1,4 +1,4 @@
-use context::{Context, PropagateError, Run, Wave, WaveCellHandle};
+use context::{Context, Observe, PropagateError, Run, Wave, WaveCellHandle};
 use coord_2d::Coord;
 use pattern::GlobalStats;
 use rand::Rng;
@@ -14,7 +14,7 @@ pub struct Ready<'a, W: OutputWrap> {
     run: Run<'a, W>,
 }
 
-pub struct Observed<'a, W: OutputWrap> {
+struct Observed<'a, W: OutputWrap> {
     run: Run<'a, W>,
 }
 
@@ -27,6 +27,11 @@ fn propagate<'a, W: OutputWrap>(
     mut run: Run<'a, W>,
 ) -> Result<Ready<'a, W>, PropagateError> {
     run.propagate().map(|()| Ready { run })
+}
+
+pub enum Step<'a, W: OutputWrap> {
+    Incomplete(Ready<'a, W>),
+    Complete,
 }
 
 impl<'a, W: OutputWrap> Ready<'a, W> {
@@ -45,11 +50,6 @@ impl<'a, W: OutputWrap> Ready<'a, W> {
         self.run
     }
 
-    pub fn observe<R: Rng>(mut self, rng: &mut R) -> Observed<'a, W> {
-        self.run.observe(rng);
-        Observed { run: self.run }
-    }
-
     pub fn manual(self, coord: Coord) -> Manual<'a, W> {
         Manual {
             run: self.run,
@@ -57,14 +57,21 @@ impl<'a, W: OutputWrap> Ready<'a, W> {
         }
     }
 
-    pub fn step<R: Rng>(self, rng: &mut R) -> Result<Ready<'a, W>, PropagateError> {
-        self.observe(rng).propagate()
+    pub fn step<R: Rng>(mut self, rng: &mut R) -> Result<Step<'a, W>, PropagateError> {
+        match self.run.observe(rng) {
+            Observe::Complete => Ok(Step::Complete),
+            Observe::Incomplete => propagate(self.run).map(Step::Incomplete),
+        }
     }
-}
 
-impl<'a, W: OutputWrap> Observed<'a, W> {
-    pub fn propagate(self) -> Result<Ready<'a, W>, PropagateError> {
-        propagate(self.run)
+    pub fn with_wave_cell_handle<F: FnMut(WaveCellHandle)>(
+        self,
+        coord: Coord,
+        mut f: F,
+    ) -> Result<Ready<'a, W>, PropagateError> {
+        let mut manual = self.manual(coord);
+        f(manual.wave_cell_handle());
+        manual.propagate()
     }
 }
 
