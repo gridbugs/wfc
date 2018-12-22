@@ -1,8 +1,7 @@
-use always_compatible::Ready;
 use coord_2d::{Coord, Size};
 use direction::{CardinalDirection, CardinalDirectionTable, CardinalDirections};
 use grid_2d::Grid;
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use pattern::{GlobalStats, PatternId, PatternStats, PatternTable};
 use rand::Rng;
 use std::cmp::Ordering;
@@ -112,7 +111,7 @@ enum DecrementNumWaysToBecomePattern {
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub struct EntropyWithNoise {
+struct EntropyWithNoise {
     entropy: f32,
     noise: u32,
     // Record this field of WaveCellStats at the time of creating this entry.  This value will be
@@ -133,34 +132,31 @@ impl PartialOrd for EntropyWithNoise {
     }
 }
 
+pub enum ChosenPatternIdError {
+    NoCompatiblePatterns,
+    MultipleCompatiblePatterns,
+}
+
 impl WaveCell {
-    pub fn first_compatible_pattern_id(&self) -> Option<PatternId> {
-        if self.stats.num_weighted_compatible_patterns > 1 {
-            return None;
+    pub fn chosen_pattern_id(&self) -> Result<PatternId, ChosenPatternIdError> {
+        if self.num_compatible_patterns == 1 {
+            let pattern_id = self.num_ways_to_become_each_pattern
+                .enumerate()
+                .filter_map(|(pattern_id, num_ways_to_become_pattern)| {
+                    if num_ways_to_become_pattern.is_zero() {
+                        None
+                    } else {
+                        Some(pattern_id)
+                    }
+                })
+                .next()
+                .expect("Missing pattern");
+            Ok(pattern_id)
+        } else if self.num_compatible_patterns == 0 {
+            Err(ChosenPatternIdError::NoCompatiblePatterns)
+        } else {
+            Err(ChosenPatternIdError::MultipleCompatiblePatterns)
         }
-        self.num_ways_to_become_each_pattern
-            .enumerate()
-            .filter_map(|(pattern_id, num_ways_to_become_pattern)| {
-                if num_ways_to_become_pattern.is_zero() {
-                    None
-                } else {
-                    Some(pattern_id)
-                }
-            })
-            .next()
-    }
-    fn compatible_pattern_ids(&self) -> Vec<PatternId> {
-        self.num_ways_to_become_each_pattern
-            .iter()
-            .enumerate()
-            .filter_map(|(pattern_id_usize, num_ways_to_become_pattern)| {
-                if num_ways_to_become_pattern.is_zero() {
-                    None
-                } else {
-                    Some(pattern_id_usize as PatternId)
-                }
-            })
-            .collect()
     }
     fn weighted_compatible_stats_enumerate<'a>(
         &'a self,
@@ -216,7 +212,7 @@ impl WaveCell {
                                 D::RemovedFinalWeightedCompatiblePattern
                             }
                         }
-                        non_zero => {
+                        _ => {
                             assert!(self.num_compatible_patterns != 0);
                             if self.num_compatible_patterns == 1 {
                                 assert!(self.stats.num_weighted_compatible_patterns == 1);
@@ -332,7 +328,6 @@ impl Propagator {
         global_stats: &GlobalStats,
         entropy_changes_by_coord: &mut HashMap<Coord, EntropyWithNoise>,
         num_cells_with_more_than_one_weighted_compatible_pattern: &mut u32,
-        soft_contradicting_coords: &mut HashSet<Coord>,
     ) -> Result<(), Contradiction> {
         entropy_changes_by_coord.clear();
         let wave_size = wave.size();
@@ -376,13 +371,10 @@ impl Propagator {
                             entropy_changes_by_coord.remove(&coord_to_update);
                         }
                         D::RemovedFinalCompatiblePattern => {
-                            // no way to recover from this type of contradiction
                             return Err(Contradiction);
                         }
                         D::RemovedFinalWeightedCompatiblePattern => {
-                            // it's posible to recover from this by manually setting the pattern
                             entropy_changes_by_coord.remove(&coord_to_update);
-                            soft_contradicting_coords.insert(coord_to_update);
                         }
                     }
                     self.removed_patterns_to_propagate
@@ -506,7 +498,6 @@ pub struct Context {
     entropy_changes_by_coord: HashMap<Coord, EntropyWithNoise>,
     observer: Observer,
     num_cells_with_more_than_one_weighted_compatible_pattern: u32,
-    soft_contradicting_coords: HashSet<Coord>,
 }
 
 #[derive(Debug)]
@@ -516,32 +507,11 @@ pub enum Observe {
 }
 
 #[derive(Debug)]
-pub enum ChoosePatternError {
-    IncompatiblePattern,
-}
-
-#[derive(Debug)]
-pub enum ForbidPattern {
-    AlreadyForbidden,
-    Done,
-}
-
-#[derive(Debug)]
-pub enum ForbidPatternError {
-    WouldCauseContradiction,
-}
-
-#[derive(Debug)]
 pub enum PropagateError {
     Contradiction,
 }
 
-#[derive(Debug)]
-pub enum StepError {
-    Contradiction,
-}
-
-pub struct WaveCellHandle<'a> {
+struct WaveCellHandle<'a> {
     cell_at_coord_mut: CellAtCoordMut<'a>,
     propagator: &'a mut Propagator,
     global_stats: &'a GlobalStats,
@@ -564,40 +534,20 @@ impl<'a> WaveCellHandle<'a> {
             global_stats,
         }
     }
-    pub fn choose_pattern(
-        &mut self,
-        pattern_id: PatternId,
-    ) -> Result<(), ChoosePatternError> {
-        if self.cell_at_coord_mut
-            .wave_cell
-            .num_ways_to_become_each_pattern[pattern_id]
-            .is_zero()
-        {
-            return Err(ChoosePatternError::IncompatiblePattern);
-        }
+    fn forbid_all_patterns_except(&mut self, pattern_id: PatternId) {
         self.cell_at_coord_mut.remove_all_patterns_except_one(
             pattern_id,
             self.global_stats,
             &mut self.propagator,
         );
-        Ok(())
     }
-    pub fn forbid_pattern(
-        &mut self,
-        pattern_id: PatternId,
-    ) -> Result<ForbidPattern, ForbidPatternError> {
+    fn forbid_pattern(&mut self, pattern_id: PatternId) {
         if self.cell_at_coord_mut
             .wave_cell
             .num_ways_to_become_each_pattern[pattern_id]
             .is_zero()
         {
-            return Ok(ForbidPattern::AlreadyForbidden);
-        }
-        if self.cell_at_coord_mut
-            .wave_cell
-            .num_compatible_patterns == 1
-        {
-            return Err(ForbidPatternError::WouldCauseContradiction);
+            return;
         }
         self.cell_at_coord_mut
             .wave_cell
@@ -618,7 +568,6 @@ impl<'a> WaveCellHandle<'a> {
                 coord: self.cell_at_coord_mut.coord,
                 pattern_id,
             });
-        Ok(ForbidPattern::Done)
     }
 }
 
@@ -630,7 +579,6 @@ impl Context {
         self.propagator.clear();
         self.observer.clear();
         self.entropy_changes_by_coord.clear();
-        self.soft_contradicting_coords.clear();
         if global_stats.num_weighted_patterns() > 1 {
             self.num_cells_with_more_than_one_weighted_compatible_pattern =
                 wave.size().count() as u32;
@@ -657,7 +605,6 @@ impl Context {
                 global_stats,
                 &mut self.entropy_changes_by_coord,
                 &mut self.num_cells_with_more_than_one_weighted_compatible_pattern,
-                &mut self.soft_contradicting_coords,
             )
             .map_err(|_: Contradiction| PropagateError::Contradiction)?;
         for (coord, entropy_with_noise) in self.entropy_changes_by_coord.drain() {
@@ -702,26 +649,64 @@ pub struct Run<'a, W: OutputWrap> {
     context: &'a mut Context,
     wave: &'a mut Wave,
     global_stats: &'a GlobalStats,
-    output_wrap: W,
+    output_wrap: PhantomData<W>,
+}
+
+pub struct WaveCellRef<'a> {
+    wave_cell: &'a WaveCell,
+    global_stats: &'a GlobalStats,
+}
+
+impl<'a> WaveCellRef<'a> {
+    pub fn sum_compatible_pattern_weight(&self) -> u32 {
+        self.wave_cell.stats.sum_compatible_pattern_weight
+    }
+    pub fn enumerate_compatible_pattern_weights(
+        &self,
+    ) -> impl 'a + Iterator<Item = (PatternId, u32)> {
+        self.wave_cell
+            .num_ways_to_become_each_pattern
+            .iter()
+            .zip(self.global_stats.pattern_stats_option_iter())
+            .enumerate()
+            .filter_map(
+                |(pattern_id_usize, (num_ways_to_become_pattern, pattern_stats))| {
+                    if num_ways_to_become_pattern.is_zero() {
+                        None
+                    } else {
+                        let pattern_id = pattern_id_usize as PatternId;
+                        let weight = pattern_stats
+                            .map(|pattern_stats| pattern_stats.weight())
+                            .unwrap_or(0);
+                        Some((pattern_id, weight))
+                    }
+                },
+            )
+    }
 }
 
 impl<'a, W: OutputWrap> Run<'a, W> {
-    pub fn propagate(&mut self) -> Result<(), PropagateError> {
+    fn propagate(&mut self) -> Result<(), PropagateError> {
         self.context
             .propagate::<W>(self.wave, self.global_stats)
     }
 
-    pub fn observe<R: Rng>(&mut self, rng: &mut R) -> Observe {
+    fn observe<R: Rng>(&mut self, rng: &mut R) -> Observe {
         self.context
             .observe(self.wave, self.global_stats, rng)
     }
 
     pub fn step<R: Rng>(&mut self, rng: &mut R) -> Result<Observe, PropagateError> {
-        self.propagate()?;
-        Ok(self.observe(rng))
+        match self.observe(rng) {
+            Observe::Complete => Ok(Observe::Complete),
+            Observe::Incomplete => {
+                self.propagate()?;
+                Ok(Observe::Incomplete)
+            }
+        }
     }
 
-    pub fn wave_cell_handle(&mut self, coord: Coord) -> WaveCellHandle {
+    fn wave_cell_handle(&mut self, coord: Coord) -> WaveCellHandle {
         WaveCellHandle::new(
             self.wave,
             coord,
@@ -730,11 +715,63 @@ impl<'a, W: OutputWrap> Run<'a, W> {
         )
     }
 
+    pub fn forbid_all_patterns_except(
+        &mut self,
+        coord: Coord,
+        pattern_id: PatternId,
+    ) -> Result<(), PropagateError> {
+        self.wave_cell_handle(coord)
+            .forbid_all_patterns_except(pattern_id);
+        self.propagate()
+    }
+
+    pub fn forbid_pattern(
+        &mut self,
+        coord: Coord,
+        pattern_id: PatternId,
+    ) -> Result<(), PropagateError> {
+        self.wave_cell_handle(coord)
+            .forbid_pattern(pattern_id);
+        self.propagate()
+    }
+
+    pub fn collapse<R: Rng>(&mut self, rng: &mut R) -> Result<(), PropagateError> {
+        loop {
+            match self.observe(rng) {
+                Observe::Complete => return Ok(()),
+                Observe::Incomplete => {
+                    self.propagate()?;
+                }
+            }
+        }
+    }
+
+    pub fn wave_cell_ref(&self, coord: Coord) -> WaveCellRef {
+        let wave_cell = self.wave.grid.get_checked(coord);
+        WaveCellRef {
+            wave_cell,
+            global_stats: self.global_stats,
+        }
+    }
+
+    pub fn wave_cell_ref_enumerate(&self) -> impl Iterator<Item = (Coord, WaveCellRef)> {
+        self.wave
+            .grid
+            .enumerate()
+            .map(move |(coord, wave_cell)| {
+                let wave_cell_ref = WaveCellRef {
+                    wave_cell,
+                    global_stats: self.global_stats,
+                };
+                (coord, wave_cell_ref)
+            })
+    }
+
     pub fn new<R: Rng>(
         context: &'a mut Context,
         wave: &'a mut Wave,
         global_stats: &'a GlobalStats,
-        output_wrap: W,
+        _output_wrap: W,
         rng: &mut R,
     ) -> Self {
         wave.init(global_stats, rng);
@@ -743,7 +780,7 @@ impl<'a, W: OutputWrap> Run<'a, W> {
             context,
             wave,
             global_stats,
-            output_wrap,
+            output_wrap: PhantomData,
         }
     }
 }

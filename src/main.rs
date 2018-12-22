@@ -6,13 +6,11 @@ extern crate image;
 extern crate rand;
 extern crate rand_xorshift;
 
-mod always_compatible;
 mod context;
 mod pattern;
 mod tiled_slice;
 mod wrap;
 
-use always_compatible::*;
 use context::*;
 use coord_2d::{Coord, Size};
 use direction::{CardinalDirection, CardinalDirectionTable};
@@ -329,54 +327,55 @@ fn main() {
         let mut wave = Wave::new(output_size);
         'generate: loop {
             let mut context = Context::new();
-            let mut wfc = Ready::new(
+            let mut run = Run::new(
                 &mut context,
                 &mut wave,
                 &global_stats,
                 WrapXY,
                 &mut rng,
             );
+
             let sprout_coord = Coord::new(
                 (rng.gen::<u32>() % output_size.width()) as i32,
                 output_size.height() as i32 - 2,
             );
 
-            wfc = wfc.with_wave_cell_handle(sprout_coord, |mut handle| {
-                handle.choose_pattern(sprout_id).unwrap()
-            }).unwrap();
+            run.forbid_all_patterns_except(sprout_coord, sprout_id)
+                .unwrap();
 
             for i in 0..(output_size.width() as i32) {
                 let coord = Coord::new(i, output_size.height() as i32 - 1);
-                wfc = wfc.with_wave_cell_handle(coord, |mut handle| {
-                    handle.choose_pattern(bottom_left_corner_id).unwrap()
-                }).unwrap();
+                run.forbid_all_patterns_except(coord, bottom_left_corner_id)
+                    .unwrap();
             }
 
             for i in 0..8 {
                 for j in 0..(output_size.width() as i32) {
                     let coord = Coord::new(j, output_size.height() as i32 - 1 - i);
-                    wfc = wfc.with_wave_cell_handle(coord, |mut handle| {
-                        handle.forbid_pattern(flower_id).unwrap();
-                    }).unwrap();
+                    run.forbid_pattern(coord, flower_id).unwrap();
                 }
             }
 
-            'steps: loop {
-                wfc = match wfc.step(&mut rng) {
-                    Err(PropagateError::Contradiction) => {
-                        println!("Contradiction");
-                        continue 'generate;
-                    }
-                    Ok(Step::Complete) => break 'generate,
-                    Ok(Step::Incomplete(wfc)) => wfc,
+            'inner: loop {
+                match run.step(&mut rng) {
+                    Ok(Observe::Complete) => break 'generate,
+                    Ok(Observe::Incomplete) => (),
+                    Err(PropagateError::Contradiction) => break 'inner,
                 }
             }
+
+            /*
+            match run.collapse(&mut rng) {
+                Ok(()) => break,
+                Err(PropagateError::Contradiction) => (),
+            } */
         }
 
+        let end_time = ::std::time::Instant::now();
+        println!("{:?}", end_time - start_time);
+
         Grid::new_fn(output_size, |coord| {
-            if let Some(pattern_id) =
-                wave.get_checked(coord).first_compatible_pattern_id()
-            {
+            if let Ok(pattern_id) = wave.get_checked(coord).chosen_pattern_id() {
                 pattern_table.colour(pattern_id, &image_grid.grid)
             } else {
                 Colour {
