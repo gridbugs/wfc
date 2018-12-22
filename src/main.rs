@@ -9,7 +9,6 @@ extern crate rand_xorshift;
 mod context;
 mod pattern;
 mod tiled_slice;
-mod wave;
 mod wrap;
 
 use context::*;
@@ -265,8 +264,7 @@ fn rng_from_integer_seed(seed: u128) -> XorShiftRng {
 
 fn main() {
     let seed: u128 = rand::thread_rng().gen();
-    let seed = 0;
-    //let seed = 29620604595521710197180480762300180126;
+    //let seed = 16786364572527804998395607799673680153;
     println!("{}", seed);
     //let mut rng = XorShiftRng::from_rng(rand::thread_rng()).unwrap();
     let mut rng = rng_from_integer_seed(seed);
@@ -297,7 +295,7 @@ fn main() {
     let stats_per_pattern = pattern_table
         .patterns
         .iter()
-        .map(|p| PatternStats::new(p.count))
+        .map(|p| PatternStats::from_u32_weight(p.count))
         .collect::<PatternTable<_>>();
 
     let compatibility_per_pattern = pattern_table
@@ -327,36 +325,50 @@ fn main() {
         .collect::<PatternTable<_>>();
     let output = {
         let global_stats = GlobalStats::new(stats_per_pattern, compatibility_per_pattern);
-        let mut context = Context::new(output_size);
-        'generation: loop {
+        let mut wave = Wave::new(output_size);
+        let mut context = Context::new();
+        {
+            let mut run = context.run::<WrapXY, _>(&mut wave, &global_stats, &mut rng);
             let sprout_coord = Coord::new(
                 (rng.gen::<u32>() % output_size.width()) as i32,
                 output_size.height() as i32 - 2,
             );
 
-            let mut run = context.run(&global_stats, WrapXY, &mut rng);
+            run.set_pattern(sprout_coord, sprout_id);
+
             for i in 0..(output_size.width() as i32) {
                 let coord = Coord::new(i, output_size.height() as i32 - 1);
                 run.set_pattern(coord, bottom_left_corner_id);
             }
-            run.set_pattern(sprout_coord, sprout_id);
+            /*
+            for _ in 0..61 {
+                run.step(&mut rng);
+            }*/
+            //run._debug();
+            //
             'steps: loop {
-                match run.step() {
-                    Ok(Step::Complete) => break 'generation,
-                    Ok(Step::Incomplete) => (),
-                    Err(Contradiction { .. }) => {
-                        println!("contradiction");
-                        break 'steps;
-                    }
+                match run.step(&mut rng) {
+                    Progress::Complete => break,
+                    Progress::Incomplete => (),
                 }
             }
         }
-        Grid::new_fn(context.size(), |coord| {
-            let pattern_id = context.get_pattern_id(coord).unwrap();
-            pattern_table.colour(pattern_id, &image_grid.grid)
+
+        Grid::new_fn(output_size, |coord| {
+            if let Some(pattern_id) =
+                wave.get_checked(coord).first_compatible_pattern_id()
+            {
+                pattern_table.colour(pattern_id, &image_grid.grid)
+            } else {
+                Colour {
+                    r: 255,
+                    g: 0,
+                    b: 0,
+                }
+            }
         })
     };
-    println!("{:?}", ::std::time::Instant::now() - start_time);
+
     let output_image = ImageGrid { grid: output };
     output_image.to_image().save("/tmp/a.png").unwrap();
 }
