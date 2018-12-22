@@ -77,9 +77,6 @@ impl PatternStats {
     pub fn weight(&self) -> u32 {
         self.weight.get()
     }
-    pub fn weight_non_zero(&self) -> NonZeroU32 {
-        self.weight
-    }
     pub fn weight_log_weight(&self) -> f32 {
         self.weight_log_weight
     }
@@ -161,13 +158,6 @@ impl GlobalStats {
         &self,
     ) -> impl Iterator<Item = Option<&PatternStats>> {
         self.stats_per_pattern.iter().map(|o| o.as_ref())
-    }
-    pub fn enumerate_pattern_stats(
-        &self,
-    ) -> impl Iterator<Item = (PatternId, &PatternStats)> {
-        self.stats_per_pattern
-            .enumerate()
-            .filter_map(|(id, stats)| stats.as_ref().map(|stats| (id, stats)))
     }
     pub fn compatible_patterns_in_direction(
         &self,

@@ -264,9 +264,7 @@ fn rng_from_integer_seed(seed: u128) -> XorShiftRng {
 
 fn main() {
     let seed: u128 = rand::thread_rng().gen();
-    //let seed = 16786364572527804998395607799673680153;
     println!("{}", seed);
-    //let mut rng = XorShiftRng::from_rng(rand::thread_rng()).unwrap();
     let mut rng = rng_from_integer_seed(seed);
     let image = image::load_from_memory(include_bytes!("flowers.png")).unwrap();
     let image_grid = ImageGrid::from_image(&image);
@@ -291,6 +289,7 @@ fn main() {
     let bottom_left_corner_coord = Coord::new(0, image_grid.grid.size().y() as i32 - 1);
     let bottom_left_corner_id = *id_grid.get_checked(bottom_left_corner_coord);
     let sprout_id = *id_grid.get_checked(Coord::new(7, 21));
+    let flower_id = *id_grid.get_checked(Coord::new(4, 1));
     pattern_table.set_count(bottom_left_corner_id, 0);
     let stats_per_pattern = pattern_table
         .patterns
@@ -334,15 +333,24 @@ fn main() {
                 output_size.height() as i32 - 2,
             );
 
-            run.set_pattern(sprout_coord, sprout_id);
+            run.choose_pattern(sprout_coord, sprout_id).unwrap();
 
             for i in 0..(output_size.width() as i32) {
                 let coord = Coord::new(i, output_size.height() as i32 - 1);
-                run.set_pattern(coord, bottom_left_corner_id);
+                run.choose_pattern(coord, bottom_left_corner_id)
+                    .unwrap();
             }
+
+            for i in 0..8 {
+                for j in 0..(output_size.width() as i32) {
+                    let coord = Coord::new(j, output_size.height() as i32 - 1 - i);
+                    run.forbid_pattern(coord, flower_id).unwrap();
+                }
+            }
+
             'steps: loop {
                 match run.step(&mut rng) {
-                    Err(Error::Contradiction) => {
+                    Err(StepError::Contradiction) => {
                         println!("Contradiction");
                         continue 'generate;
                     }
