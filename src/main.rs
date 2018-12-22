@@ -6,12 +6,13 @@ extern crate image;
 extern crate rand;
 extern crate rand_xorshift;
 
+mod always_compatible;
 mod context;
 mod pattern;
-mod safe;
 mod tiled_slice;
 mod wrap;
 
+use always_compatible::*;
 use context::*;
 use coord_2d::{Coord, Size};
 use direction::{CardinalDirection, CardinalDirectionTable};
@@ -22,7 +23,6 @@ use image::{DynamicImage, Rgb, RgbImage};
 use pattern::{GlobalStats, PatternId, PatternStats, PatternTable};
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
-use safe::*;
 use tiled_slice::*;
 use wrap::*;
 

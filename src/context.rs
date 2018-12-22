@@ -1,10 +1,10 @@
+use always_compatible::Ready;
 use coord_2d::{Coord, Size};
 use direction::{CardinalDirection, CardinalDirectionTable, CardinalDirections};
 use grid_2d::Grid;
 use hashbrown::{HashMap, HashSet};
 use pattern::{GlobalStats, PatternId, PatternStats, PatternTable};
 use rand::Rng;
-use safe::Ready;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::marker::PhantomData;
