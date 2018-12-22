@@ -4,6 +4,7 @@ use grid_2d::Grid;
 use hashbrown::{HashMap, HashSet};
 use pattern::{GlobalStats, PatternId, PatternStats, PatternTable};
 use rand::Rng;
+use safe::Ready;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::marker::PhantomData;
@@ -508,7 +509,8 @@ pub struct Context {
     soft_contradicting_coords: HashSet<Coord>,
 }
 
-pub enum Progress {
+#[derive(Debug)]
+pub enum Observe {
     Incomplete,
     Complete,
 }
@@ -530,8 +532,94 @@ pub enum ForbidPatternError {
 }
 
 #[derive(Debug)]
+pub enum PropagateError {
+    Contradiction,
+}
+
+#[derive(Debug)]
 pub enum StepError {
     Contradiction,
+}
+
+pub struct WaveCellHandle<'a> {
+    cell_at_coord_mut: CellAtCoordMut<'a>,
+    propagator: &'a mut Propagator,
+    global_stats: &'a GlobalStats,
+}
+
+impl<'a> WaveCellHandle<'a> {
+    fn new(
+        wave: &'a mut Wave,
+        coord: Coord,
+        propagator: &'a mut Propagator,
+        global_stats: &'a GlobalStats,
+    ) -> Self {
+        let cell_at_coord_mut = CellAtCoordMut {
+            wave_cell: wave.grid.get_checked_mut(coord),
+            coord,
+        };
+        Self {
+            cell_at_coord_mut,
+            propagator,
+            global_stats,
+        }
+    }
+    pub fn choose_pattern(
+        &mut self,
+        pattern_id: PatternId,
+    ) -> Result<(), ChoosePatternError> {
+        if self.cell_at_coord_mut
+            .wave_cell
+            .num_ways_to_become_each_pattern[pattern_id]
+            .is_zero()
+        {
+            return Err(ChoosePatternError::IncompatiblePattern);
+        }
+        self.cell_at_coord_mut.remove_all_patterns_except_one(
+            pattern_id,
+            self.global_stats,
+            &mut self.propagator,
+        );
+        Ok(())
+    }
+    pub fn forbid_pattern(
+        &mut self,
+        pattern_id: PatternId,
+    ) -> Result<ForbidPattern, ForbidPatternError> {
+        if self.cell_at_coord_mut
+            .wave_cell
+            .num_ways_to_become_each_pattern[pattern_id]
+            .is_zero()
+        {
+            return Ok(ForbidPattern::AlreadyForbidden);
+        }
+        if self.cell_at_coord_mut
+            .wave_cell
+            .num_compatible_patterns == 1
+        {
+            return Err(ForbidPatternError::WouldCauseContradiction);
+        }
+        self.cell_at_coord_mut
+            .wave_cell
+            .num_ways_to_become_each_pattern[pattern_id]
+            .clear_all_directions();
+        self.cell_at_coord_mut
+            .wave_cell
+            .num_compatible_patterns -= 1;
+        if let Some(pattern_stats) = self.global_stats.pattern_stats(pattern_id) {
+            self.cell_at_coord_mut
+                .wave_cell
+                .stats
+                .remove_compatible_pattern(pattern_stats);
+        }
+        self.propagator
+            .removed_patterns_to_propagate
+            .push(RemovedPattern {
+                coord: self.cell_at_coord_mut.coord,
+                pattern_id,
+            });
+        Ok(ForbidPattern::Done)
+    }
 }
 
 impl Context {
@@ -562,14 +650,16 @@ impl Context {
         &mut self,
         wave: &mut Wave,
         global_stats: &GlobalStats,
-    ) -> Result<(), Contradiction> {
-        self.propagator.propagate::<W>(
-            wave,
-            global_stats,
-            &mut self.entropy_changes_by_coord,
-            &mut self.num_cells_with_more_than_one_weighted_compatible_pattern,
-            &mut self.soft_contradicting_coords,
-        )?;
+    ) -> Result<(), PropagateError> {
+        self.propagator
+            .propagate::<W>(
+                wave,
+                global_stats,
+                &mut self.entropy_changes_by_coord,
+                &mut self.num_cells_with_more_than_one_weighted_compatible_pattern,
+                &mut self.soft_contradicting_coords,
+            )
+            .map_err(|_: Contradiction| PropagateError::Contradiction)?;
         for (coord, entropy_with_noise) in self.entropy_changes_by_coord.drain() {
             self.observer
                 .entropy_priority_queue
@@ -585,13 +675,13 @@ impl Context {
         wave: &mut Wave,
         global_stats: &GlobalStats,
         rng: &mut R,
-    ) -> Progress {
+    ) -> Observe {
         if self.num_cells_with_more_than_one_weighted_compatible_pattern == 0 {
-            return Progress::Complete;
+            return Observe::Complete;
         }
         let mut cell_at_coord = match self.observer.choose_next_cell(wave) {
             ChooseNextCell::NoCellsWithMultipleWeightedPatterns => {
-                return Progress::Complete
+                return Observe::Complete
             }
             ChooseNextCell::MinEntropyCell(cell_at_coord) => cell_at_coord,
         };
@@ -604,72 +694,7 @@ impl Context {
             &mut self.propagator,
         );
         self.num_cells_with_more_than_one_weighted_compatible_pattern -= 1;
-        Progress::Incomplete
-    }
-    fn step<W: OutputWrap, R: Rng>(
-        &mut self,
-        wave: &mut Wave,
-        global_stats: &GlobalStats,
-        rng: &mut R,
-    ) -> Result<Progress, StepError> {
-        self.propagate::<W>(wave, global_stats)
-            .map_err(|_: Contradiction| StepError::Contradiction)?;
-        Ok(self.observe(wave, global_stats, rng))
-    }
-    fn choose_pattern(
-        &mut self,
-        coord: Coord,
-        wave: &mut Wave,
-        pattern_id: PatternId,
-        global_stats: &GlobalStats,
-    ) -> Result<(), ChoosePatternError> {
-        let wave_cell = wave.grid.get_checked_mut(coord);
-        if wave_cell.num_ways_to_become_each_pattern[pattern_id].is_zero() {
-            return Err(ChoosePatternError::IncompatiblePattern);
-        }
-        CellAtCoordMut { wave_cell, coord }.remove_all_patterns_except_one(
-            pattern_id,
-            global_stats,
-            &mut self.propagator,
-        );
-        Ok(())
-    }
-    fn forbid_pattern(
-        &mut self,
-        coord: Coord,
-        wave: &mut Wave,
-        pattern_id: PatternId,
-        global_stats: &GlobalStats,
-    ) -> Result<ForbidPattern, ForbidPatternError> {
-        let wave_cell = wave.grid.get_checked_mut(coord);
-        if wave_cell.num_ways_to_become_each_pattern[pattern_id].is_zero() {
-            return Ok(ForbidPattern::AlreadyForbidden);
-        }
-        if wave_cell.num_compatible_patterns == 1 {
-            return Err(ForbidPatternError::WouldCauseContradiction);
-        }
-        wave_cell.num_ways_to_become_each_pattern[pattern_id].clear_all_directions();
-        wave_cell.num_compatible_patterns -= 1;
-        if let Some(pattern_stats) = global_stats.pattern_stats(pattern_id) {
-            wave_cell
-                .stats
-                .remove_compatible_pattern(pattern_stats);
-        }
-        self.propagator
-            .removed_patterns_to_propagate
-            .push(RemovedPattern {
-                coord,
-                pattern_id,
-            });
-        Ok(ForbidPattern::Done)
-    }
-    pub fn run<'a, W: OutputWrap, R: Rng>(
-        &'a mut self,
-        wave: &'a mut Wave,
-        global_stats: &'a GlobalStats,
-        rng: &mut R,
-    ) -> Run<W> {
-        Run::new(self, wave, global_stats, rng)
+        Observe::Incomplete
     }
 }
 
@@ -677,35 +702,39 @@ pub struct Run<'a, W: OutputWrap> {
     context: &'a mut Context,
     wave: &'a mut Wave,
     global_stats: &'a GlobalStats,
-    output_wrap: PhantomData<W>,
+    output_wrap: W,
 }
 
 impl<'a, W: OutputWrap> Run<'a, W> {
-    pub fn step<R: Rng>(&mut self, rng: &mut R) -> Result<Progress, StepError> {
+    pub fn propagate(&mut self) -> Result<(), PropagateError> {
         self.context
-            .step::<W, _>(self.wave, self.global_stats, rng)
+            .propagate::<W>(self.wave, self.global_stats)
     }
-    pub fn choose_pattern(
-        &mut self,
-        coord: Coord,
-        pattern_id: PatternId,
-    ) -> Result<(), ChoosePatternError> {
+
+    pub fn observe<R: Rng>(&mut self, rng: &mut R) -> Observe {
         self.context
-            .choose_pattern(coord, &mut self.wave, pattern_id, self.global_stats)
+            .observe(self.wave, self.global_stats, rng)
     }
-    pub fn forbid_pattern(
-        &mut self,
-        coord: Coord,
-        pattern_id: PatternId,
-    ) -> Result<ForbidPattern, ForbidPatternError> {
-        self.context
-            .forbid_pattern(coord, &mut self.wave, pattern_id, self.global_stats)
+
+    pub fn step<R: Rng>(&mut self, rng: &mut R) -> Result<Observe, PropagateError> {
+        self.propagate()?;
+        Ok(self.observe(rng))
+    }
+
+    pub fn wave_cell_handle(&mut self, coord: Coord) -> WaveCellHandle {
+        WaveCellHandle::new(
+            self.wave,
+            coord,
+            &mut self.context.propagator,
+            self.global_stats,
+        )
     }
 
     pub fn new<R: Rng>(
         context: &'a mut Context,
         wave: &'a mut Wave,
         global_stats: &'a GlobalStats,
+        output_wrap: W,
         rng: &mut R,
     ) -> Self {
         wave.init(global_stats, rng);
@@ -714,7 +743,7 @@ impl<'a, W: OutputWrap> Run<'a, W> {
             context,
             wave,
             global_stats,
-            output_wrap: PhantomData,
+            output_wrap,
         }
     }
 }

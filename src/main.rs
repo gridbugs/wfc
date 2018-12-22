@@ -8,6 +8,7 @@ extern crate rand_xorshift;
 
 mod context;
 mod pattern;
+mod safe;
 mod tiled_slice;
 mod wrap;
 
@@ -21,6 +22,7 @@ use image::{DynamicImage, Rgb, RgbImage};
 use pattern::{GlobalStats, PatternId, PatternStats, PatternTable};
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
+use safe::*;
 use tiled_slice::*;
 use wrap::*;
 
@@ -327,35 +329,46 @@ fn main() {
         let mut wave = Wave::new(output_size);
         'generate: loop {
             let mut context = Context::new();
-            let mut run = context.run::<WrapXY, _>(&mut wave, &global_stats, &mut rng);
+            let mut run = Run::new(
+                &mut context,
+                &mut wave,
+                &global_stats,
+                WrapXY,
+                &mut rng,
+            );
             let sprout_coord = Coord::new(
                 (rng.gen::<u32>() % output_size.width()) as i32,
                 output_size.height() as i32 - 2,
             );
 
-            run.choose_pattern(sprout_coord, sprout_id).unwrap();
+            run.wave_cell_handle(sprout_coord)
+                .choose_pattern(sprout_id)
+                .unwrap();
 
             for i in 0..(output_size.width() as i32) {
                 let coord = Coord::new(i, output_size.height() as i32 - 1);
-                run.choose_pattern(coord, bottom_left_corner_id)
+                run.wave_cell_handle(coord)
+                    .choose_pattern(bottom_left_corner_id)
                     .unwrap();
             }
 
             for i in 0..8 {
                 for j in 0..(output_size.width() as i32) {
                     let coord = Coord::new(j, output_size.height() as i32 - 1 - i);
-                    run.forbid_pattern(coord, flower_id).unwrap();
+                    run.wave_cell_handle(coord)
+                        .forbid_pattern(flower_id)
+                        .unwrap();
                 }
             }
 
             'steps: loop {
                 match run.step(&mut rng) {
-                    Err(StepError::Contradiction) => {
+                    Err(PropagateError::Contradiction) => {
                         println!("Contradiction");
                         continue 'generate;
                     }
-                    Ok(Progress::Complete) => break 'generate,
-                    Ok(Progress::Incomplete) => (),
+                    Ok(Observe::Complete) => break 'generate,
+                    Ok(Observe::Incomplete) => (),
                 }
             }
         }
