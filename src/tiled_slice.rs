@@ -3,14 +3,6 @@ use grid_2d::coord_system::{CoordSystem, XThenY, XThenYIter};
 use grid_2d::*;
 use std::hash::{Hash, Hasher};
 
-pub fn new<'a, T, S: CoordSystem + Clone>(
-    grid: &'a Grid<T, S>,
-    offset: Coord,
-    size: Size,
-) -> TiledGridSlice<'a, T, S> {
-    TiledGridSlice { grid, offset, size }
-}
-
 #[derive(Clone)]
 pub struct TiledGridSlice<'a, T: 'a, S: 'a + CoordSystem + Clone = XThenY> {
     grid: &'a Grid<T, S>,
@@ -40,15 +32,16 @@ impl<'a, T, S> TiledGridSlice<'a, T, S>
 where
     S: CoordSystem + Clone,
 {
+    pub fn new(grid: &'a Grid<T, S>, offset: Coord, size: Size) -> Self {
+        TiledGridSlice {
+            grid,
+            offset,
+            size,
+        }
+    }
+
     pub fn offset(&self) -> Coord {
         self.offset
-    }
-    pub fn get(&self, coord: Coord) -> Option<&T> {
-        if coord.is_valid(self.size) {
-            Some(self.grid.get_tiled(self.offset + coord))
-        } else {
-            None
-        }
     }
     pub fn iter(&self) -> TiledGridSliceIter<T, S> {
         TiledGridSliceIter {
@@ -78,7 +71,11 @@ where
         self.size == other.size && self.iter().zip(other.iter()).all(|(s, o)| s.eq(o))
     }
 }
-impl<'a, T: Eq, S> Eq for TiledGridSlice<'a, T, S> where S: CoordSystem + Clone {}
+impl<'a, T: Eq, S> Eq for TiledGridSlice<'a, T, S>
+where
+    S: CoordSystem + Clone,
+{
+}
 
 #[cfg(test)]
 mod test {

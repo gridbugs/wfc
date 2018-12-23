@@ -6,269 +6,35 @@ extern crate image;
 extern crate rand;
 extern crate rand_xorshift;
 
+mod overlapping;
 mod tiled_slice;
 mod wfc;
 mod wrap;
 
 use coord_2d::{Coord, Size};
-use direction::{CardinalDirection, CardinalDirectionTable, CardinalDirections};
-use grid_2d::coord_system::XThenYIter;
 use grid_2d::Grid;
-use hashbrown::HashMap;
 use image::{DynamicImage, Rgb, RgbImage};
+use overlapping::OverlappingPatterns;
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
-use std::num::NonZeroU32;
-use tiled_slice::*;
 use wfc::*;
 use wrap::*;
 
-pub fn are_patterns_compatible<T: PartialEq>(
-    a: Coord,
-    b: Coord,
-    b_offset_direction: CardinalDirection,
-    pattern_size: Size,
-    grid: &Grid<T>,
-) -> bool {
-    let (overlap_size_to_sub, a_offset, b_offset) = match b_offset_direction {
-        CardinalDirection::North => (Size::new(0, 1), Coord::new(0, 0), Coord::new(0, 1)),
-        CardinalDirection::South => (Size::new(0, 1), Coord::new(0, 1), Coord::new(0, 0)),
-        CardinalDirection::East => (Size::new(1, 0), Coord::new(1, 0), Coord::new(0, 0)),
-        CardinalDirection::West => (Size::new(1, 0), Coord::new(0, 0), Coord::new(1, 0)),
-    };
-    let overlap_size = pattern_size - overlap_size_to_sub;
-    let a_overlap = a + a_offset;
-    let b_overlap = b + b_offset;
-    let a_slice = tiled_slice::new(grid, a_overlap, overlap_size);
-    let b_slice = tiled_slice::new(grid, b_overlap, overlap_size);
-    a_slice
-        .iter()
-        .zip(b_slice.iter())
-        .all(|(a, b)| a == b)
+fn image_to_grid(image: &DynamicImage) -> Grid<Rgb<u8>> {
+    let rgb_image = image.to_rgb();
+    let size = Size::new(rgb_image.width(), rgb_image.height());
+    Grid::new_fn(size, |Coord { x, y }| {
+        *rgb_image.get_pixel(x as u32, y as u32)
+    })
 }
 
-#[cfg(test)]
-mod pattern_test {
-    use super::*;
-    use coord_2d::{Coord, Size};
-    use direction::CardinalDirection;
-    use grid_2d::Grid;
-    #[test]
-    fn compatibile_patterns() {
-        let r = Colour {
-            r: 255,
-            g: 0,
-            b: 0,
-        };
-        let b = Colour {
-            r: 0,
-            g: 0,
-            b: 255,
-        };
-        let array = [[r, b, b], [b, r, b]];
-        let grid = Grid::new_fn(Size::new(3, 2), |coord| {
-            array[coord.y as usize][coord.x as usize]
-        });
-        let pattern_size = Size::new(2, 2);
-        assert!(are_patterns_compatible(
-            Coord::new(0, 0),
-            Coord::new(1, 0),
-            CardinalDirection::East,
-            pattern_size,
-            &grid,
-        ));
-        assert!(are_patterns_compatible(
-            Coord::new(0, 0),
-            Coord::new(1, 0),
-            CardinalDirection::North,
-            pattern_size,
-            &grid,
-        ));
-        assert!(!are_patterns_compatible(
-            Coord::new(0, 0),
-            Coord::new(1, 0),
-            CardinalDirection::South,
-            pattern_size,
-            &grid,
-        ));
-        assert!(!are_patterns_compatible(
-            Coord::new(0, 0),
-            Coord::new(1, 0),
-            CardinalDirection::West,
-            pattern_size,
-            &grid,
-        ));
+fn grid_to_image(grid: &Grid<Rgb<u8>>) -> DynamicImage {
+    let size = grid.size();
+    let mut rgb_image = RgbImage::new(size.width(), size.height());
+    for (Coord { x, y }, colour) in grid.enumerate() {
+        rgb_image.put_pixel(x as u32, y as u32, *colour);
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Colour {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-}
-impl Colour {
-    fn from_rgb(Rgb { data: [r, g, b] }: Rgb<u8>) -> Self {
-        Self { r, g, b }
-    }
-    fn to_rgb(self) -> Rgb<u8> {
-        Rgb {
-            data: [self.r, self.g, self.b],
-        }
-    }
-}
-pub struct PatternIter<'a> {
-    grid: &'a Grid<Colour>,
-    pattern_size: Size,
-    coord_iter: XThenYIter,
-}
-impl<'a> Iterator for PatternIter<'a> {
-    type Item = TiledGridSlice<'a, Colour>;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.coord_iter
-            .next()
-            .map(|coord| tiled_slice::new(self.grid, coord, self.pattern_size))
-    }
-}
-pub struct ImageGrid {
-    pub grid: Grid<Colour>,
-}
-impl ImageGrid {
-    pub fn from_image(image: &DynamicImage) -> Self {
-        let rgb_image = image.to_rgb();
-        let size = Size::new(rgb_image.width(), rgb_image.height());
-        let grid = Grid::new_fn(
-            size,
-            |Coord { x, y }| Colour::from_rgb(*rgb_image.get_pixel(x as u32, y as u32)),
-        );
-        Self { grid }
-    }
-    pub fn to_image(&self) -> DynamicImage {
-        let size = self.grid.size();
-        let mut rgb_image = RgbImage::new(size.width(), size.height());
-        for (Coord { x, y }, colour) in self.grid.enumerate() {
-            rgb_image.put_pixel(x as u32, y as u32, colour.to_rgb());
-        }
-        DynamicImage::ImageRgb8(rgb_image)
-    }
-    pub fn patterns(&self, pattern_size: Size) -> PatternIter {
-        PatternIter {
-            grid: &self.grid,
-            pattern_size,
-            coord_iter: XThenYIter::from(self.grid.size()),
-        }
-    }
-}
-
-struct PrePattern {
-    coords: Vec<Coord>,
-    count: u32,
-}
-
-impl PrePattern {
-    fn new() -> Self {
-        Self {
-            coords: Vec::new(),
-            count: 0,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct Pattern {
-    coords: Vec<Coord>,
-    count: u32,
-    count_log_count: f32,
-}
-
-impl Pattern {
-    fn new(coords: Vec<Coord>, count: u32) -> Self {
-        let count_log_count = (count as f32) * (count as f32).log2();
-        Self {
-            coords,
-            count,
-            count_log_count,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct PatternTable_ {
-    patterns: Vec<Pattern>,
-    sum_pattern_count: u32,
-    sum_pattern_count_log_count: f32,
-}
-
-impl PatternTable_ {
-    fn new(mut patterns: Vec<Pattern>) -> Self {
-        patterns.sort_by_key(|i| i.coords[0]);
-        let sum_pattern_count = patterns.iter().map(|p| p.count).sum();
-        let sum_pattern_count_log_count =
-            patterns.iter().map(|p| p.count_log_count).sum();
-        Self {
-            patterns,
-            sum_pattern_count,
-            sum_pattern_count_log_count,
-        }
-    }
-    fn set_count(&mut self, pattern_id: PatternId, count: u32) {
-        let (count_diff, count_log_count_diff) = {
-            let pattern = &mut self.patterns[pattern_id as usize];
-            let count_diff = pattern.count - count;
-            let count_log_count = if count == 0 {
-                0.
-            } else {
-                (count as f32) * (count as f32).log2()
-            };
-            let count_log_count_diff = pattern.count_log_count - count_log_count;
-            pattern.count = count;
-            pattern.count_log_count = count_log_count;
-            (count_diff, count_log_count_diff)
-        };
-        self.sum_pattern_count -= count_diff;
-        self.sum_pattern_count_log_count -= count_log_count_diff;
-    }
-    fn colour(&self, pattern_id: PatternId, input_grid: &Grid<Colour>) -> Colour {
-        input_grid
-            .get(self.patterns[pattern_id as usize].coords[0])
-            .cloned()
-            .unwrap()
-    }
-    fn id_grid(&self, size: Size) -> Grid<PatternId> {
-        let mut maybe_id_grid = Grid::new_clone(size, None);
-        self.patterns
-            .iter()
-            .enumerate()
-            .for_each(|(pattern_id, pattern)| {
-                pattern.coords.iter().for_each(|&coord| {
-                    *maybe_id_grid.get_checked_mut(coord) = Some(pattern_id as PatternId);
-                });
-            });
-        Grid::new_fn(size, |coord| {
-            maybe_id_grid.get_checked(coord).unwrap().clone()
-        })
-    }
-    fn compatible_patterns<'a, T: PartialEq>(
-        &'a self,
-        pattern: &'a Pattern,
-        pattern_size: Size,
-        image: &'a Grid<T>,
-        direction: CardinalDirection,
-    ) -> impl 'a + Iterator<Item = PatternId> {
-        self.patterns
-            .iter()
-            .enumerate()
-            .filter(move |(_id, other)| {
-                are_patterns_compatible(
-                    pattern.coords[0],
-                    other.coords[0],
-                    direction,
-                    pattern_size,
-                    image,
-                )
-            })
-            .map(|(id, _other)| id as PatternId)
-    }
+    DynamicImage::ImageRgb8(rgb_image)
 }
 
 fn rng_from_integer_seed(seed: u128) -> XorShiftRng {
@@ -287,49 +53,23 @@ fn main() {
     println!("{}", seed);
     let mut rng = rng_from_integer_seed(seed);
     let image = image::load_from_memory(include_bytes!("flowers.png")).unwrap();
-    let image_grid = ImageGrid::from_image(&image);
+    let image_grid = image_to_grid(&image);
     let pattern_size = Size::new(3, 3);
     let output_size = Size::new(48, 48);
     let start_time = ::std::time::Instant::now();
-    let mut pre_patterns = HashMap::new();
-    for pattern in image_grid.patterns(pattern_size) {
-        let info = pre_patterns
-            .entry(pattern.clone())
-            .or_insert_with(|| PrePattern::new());
-        info.coords.push(pattern.offset());
-        info.count += 1;
-    }
-    let patterns = pre_patterns
-        .drain()
-        .map(|(_, pre_pattern)| Pattern::new(pre_pattern.coords, pre_pattern.count))
-        .collect::<Vec<_>>();
-
-    let mut pattern_table = PatternTable_::new(patterns);
-    let id_grid = pattern_table.id_grid(image_grid.grid.size());
-    let bottom_left_corner_coord = Coord::new(0, image_grid.grid.size().y() as i32 - 1);
+    let mut overlapping_patterns = OverlappingPatterns::new(&image_grid, pattern_size);
+    let id_grid = overlapping_patterns.id_grid();
+    let bottom_left_corner_coord = Coord::new(0, image_grid.size().y() as i32 - 1);
     let bottom_left_corner_id = *id_grid.get_checked(bottom_left_corner_coord);
     let sprout_id = *id_grid.get_checked(Coord::new(7, 21));
     let flower_id = *id_grid.get_checked(Coord::new(4, 1));
 
-    pattern_table.set_count(bottom_left_corner_id, 0);
-
-    let pattern_descriptions = pattern_table
-        .patterns
-        .iter()
-        .map(|p| {
-            let weight = NonZeroU32::new(p.count);
-            let mut allowed_neighbours = CardinalDirectionTable::default();
-            for direction in CardinalDirections {
-                allowed_neighbours[direction] = pattern_table
-                    .compatible_patterns(p, pattern_size, &image_grid.grid, direction)
-                    .collect::<Vec<_>>();
-            }
-            PatternDescription::new(weight, allowed_neighbours)
-        })
-        .collect::<PatternTable<_>>();
+    overlapping_patterns
+        .pattern_mut(bottom_left_corner_id)
+        .clear_count();
 
     let output = {
-        let global_stats = GlobalStats::new(pattern_descriptions);
+        let global_stats = overlapping_patterns.global_stats();
         let mut wave = Wave::new(output_size);
         'generate: loop {
             let mut context = Context::new();
@@ -376,17 +116,16 @@ fn main() {
 
         Grid::new_fn(output_size, |coord| {
             if let Ok(pattern_id) = wave.get_checked(coord).chosen_pattern_id() {
-                pattern_table.colour(pattern_id, &image_grid.grid)
+                image_grid
+                    .get_checked(overlapping_patterns.pattern(pattern_id).coord())
+                    .clone()
             } else {
-                Colour {
-                    r: 255,
-                    g: 0,
-                    b: 0,
+                Rgb {
+                    data: [255, 0, 0],
                 }
             }
         })
     };
 
-    let output_image = ImageGrid { grid: output };
-    output_image.to_image().save("/tmp/a.png").unwrap();
+    grid_to_image(&output).save("/tmp/a.png").unwrap();
 }

@@ -20,6 +20,9 @@ pub struct PatternTable<T> {
 }
 
 impl<T> PatternTable<T> {
+    pub fn from_vec(table: Vec<T>) -> Self {
+        Self { table }
+    }
     pub fn len(&self) -> usize {
         self.table.len()
     }
@@ -84,12 +87,6 @@ impl PatternWeight {
             weight,
             weight_log_weight: (weight.get() as f32) * (weight.get() as f32).log2(),
         }
-    }
-    pub fn from_u32_weight(weight: u32) -> Option<Self> {
-        NonZeroU32::new(weight).map(|weight| Self {
-            weight,
-            weight_log_weight: (weight.get() as f32) * (weight.get() as f32).log2(),
-        })
     }
     pub fn weight(&self) -> u32 {
         self.weight.get()
