@@ -2,12 +2,220 @@ use coord_2d::{Coord, Size};
 use direction::{CardinalDirection, CardinalDirectionTable, CardinalDirections};
 use grid_2d::Grid;
 use hashbrown::HashMap;
-use pattern::{GlobalStats, PatternId, PatternStats, PatternTable};
 use rand::Rng;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use std::iter;
 use std::marker::PhantomData;
-use wrap::OutputWrap;
+use std::num::NonZeroU32;
+use std::ops::{Index, IndexMut};
+use std::slice;
+use wrap::Wrap;
+
+pub type PatternId = u32;
+
+#[derive(Default, Clone, Debug)]
+pub struct PatternTable<T> {
+    table: Vec<T>,
+}
+
+impl<T> PatternTable<T> {
+    pub fn len(&self) -> usize {
+        self.table.len()
+    }
+    pub fn drain(&mut self) -> ::std::vec::Drain<T> {
+        self.table.drain(..)
+    }
+    pub fn iter(&self) -> slice::Iter<T> {
+        self.table.iter()
+    }
+    pub fn iter_mut(&mut self) -> slice::IterMut<T> {
+        self.table.iter_mut()
+    }
+    pub fn enumerate(&self) -> impl Iterator<Item = (PatternId, &T)> {
+        self.iter()
+            .enumerate()
+            .map(|(index, item)| (index as PatternId, item))
+    }
+    pub fn enumerate_mut(&mut self) -> impl Iterator<Item = (PatternId, &mut T)> {
+        self.iter_mut()
+            .enumerate()
+            .map(|(index, item)| (index as PatternId, item))
+    }
+}
+impl<T: Clone> PatternTable<T> {
+    fn resize(&mut self, size: usize, value: T) {
+        self.table.resize(size, value);
+    }
+}
+
+impl<T> iter::FromIterator<T> for PatternTable<T> {
+    fn from_iter<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+    {
+        Self {
+            table: Vec::from_iter(iter),
+        }
+    }
+}
+
+impl<T> Index<PatternId> for PatternTable<T> {
+    type Output = T;
+    fn index(&self, index: PatternId) -> &Self::Output {
+        self.table.index(index as usize)
+    }
+}
+
+impl<T> IndexMut<PatternId> for PatternTable<T> {
+    fn index_mut(&mut self, index: PatternId) -> &mut Self::Output {
+        self.table.index_mut(index as usize)
+    }
+}
+
+pub struct PatternWeight {
+    weight: NonZeroU32,
+    weight_log_weight: f32,
+}
+
+impl PatternWeight {
+    pub fn new(weight: NonZeroU32) -> Self {
+        Self {
+            weight,
+            weight_log_weight: (weight.get() as f32) * (weight.get() as f32).log2(),
+        }
+    }
+    pub fn from_u32_weight(weight: u32) -> Option<Self> {
+        NonZeroU32::new(weight).map(|weight| Self {
+            weight,
+            weight_log_weight: (weight.get() as f32) * (weight.get() as f32).log2(),
+        })
+    }
+    pub fn weight(&self) -> u32 {
+        self.weight.get()
+    }
+    pub fn weight_log_weight(&self) -> f32 {
+        self.weight_log_weight
+    }
+}
+
+pub struct GlobalStats {
+    pattern_weights: PatternTable<Option<PatternWeight>>,
+    compatibility_per_pattern: PatternTable<CardinalDirectionTable<Vec<PatternId>>>,
+    num_weighted_patterns: u32,
+    sum_pattern_weight: u32,
+    sum_pattern_weight_log_weight: f32,
+}
+
+struct NumWaysToBecomeEachPatternByDirection<'a> {
+    iter: slice::Iter<'a, CardinalDirectionTable<Vec<PatternId>>>,
+}
+
+impl<'a> Iterator for NumWaysToBecomeEachPatternByDirection<'a> {
+    type Item = CardinalDirectionTable<u32>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter
+            .next()
+            .map(|compatible_patterns_by_direction| {
+                let mut num_ways_to_become_pattern_from_direction =
+                    CardinalDirectionTable::default();
+                for direction in CardinalDirections {
+                    num_ways_to_become_pattern_from_direction[direction] =
+                        compatible_patterns_by_direction
+                            .get(direction.opposite())
+                            .len() as u32;
+                }
+
+                num_ways_to_become_pattern_from_direction
+            })
+    }
+}
+
+pub struct PatternDescription {
+    pub weight: Option<NonZeroU32>,
+    pub allowed_neighbours: CardinalDirectionTable<Vec<PatternId>>,
+}
+
+impl PatternDescription {
+    pub fn new(
+        weight: Option<NonZeroU32>,
+        allowed_neighbours: CardinalDirectionTable<Vec<PatternId>>,
+    ) -> Self {
+        Self {
+            weight,
+            allowed_neighbours,
+        }
+    }
+}
+
+impl GlobalStats {
+    pub fn new(mut pattern_descriptions: PatternTable<PatternDescription>) -> Self {
+        let pattern_weights = pattern_descriptions
+            .iter()
+            .map(|desc| desc.weight.map(PatternWeight::new))
+            .collect::<PatternTable<_>>();
+        let compatibility_per_pattern = pattern_descriptions
+            .drain()
+            .map(|desc| desc.allowed_neighbours)
+            .collect::<PatternTable<_>>();
+        let num_weighted_patterns =
+            pattern_weights.iter().filter(|p| p.is_some()).count() as u32;
+        let sum_pattern_weight = pattern_weights
+            .iter()
+            .filter_map(|p| p.as_ref().map(|p| p.weight()))
+            .sum();
+        let sum_pattern_weight_log_weight = pattern_weights
+            .iter()
+            .filter_map(|p| p.as_ref().map(|p| p.weight_log_weight()))
+            .sum();
+        Self {
+            pattern_weights,
+            compatibility_per_pattern,
+            num_weighted_patterns,
+            sum_pattern_weight,
+            sum_pattern_weight_log_weight,
+        }
+    }
+    fn num_weighted_patterns(&self) -> u32 {
+        self.num_weighted_patterns
+    }
+    fn sum_pattern_weight(&self) -> u32 {
+        self.sum_pattern_weight
+    }
+    fn sum_pattern_weight_log_weight(&self) -> f32 {
+        self.sum_pattern_weight_log_weight
+    }
+    fn num_patterns(&self) -> usize {
+        self.pattern_weights.len()
+    }
+    fn pattern_stats(&self, pattern_id: PatternId) -> Option<&PatternWeight> {
+        self.pattern_weights[pattern_id].as_ref()
+    }
+    fn pattern_stats_option_iter(&self) -> impl Iterator<Item = Option<&PatternWeight>> {
+        self.pattern_weights.iter().map(|o| o.as_ref())
+    }
+    fn compatible_patterns_in_direction(
+        &self,
+        pattern_id: PatternId,
+        direction: CardinalDirection,
+    ) -> impl Iterator<Item = &PatternId> {
+        self.compatibility_per_pattern[pattern_id]
+            .get(direction)
+            .iter()
+    }
+    fn compatible_patterns_by_direction(
+        &self,
+    ) -> slice::Iter<CardinalDirectionTable<Vec<PatternId>>> {
+        self.compatibility_per_pattern.iter()
+    }
+    fn num_ways_to_become_each_pattern_by_direction(
+        &self,
+    ) -> NumWaysToBecomeEachPatternByDirection {
+        NumWaysToBecomeEachPatternByDirection {
+            iter: self.compatible_patterns_by_direction(),
+        }
+    }
+}
 
 #[derive(Default, Debug)]
 struct WaveCellStats {
@@ -19,7 +227,7 @@ struct WaveCellStats {
 }
 
 impl WaveCellStats {
-    fn remove_compatible_pattern(&mut self, pattern_stats: &PatternStats) {
+    fn remove_compatible_pattern(&mut self, pattern_stats: &PatternWeight) {
         assert!(self.num_weighted_compatible_patterns >= 1);
         assert!(self.sum_compatible_pattern_weight >= pattern_stats.weight());
 
@@ -161,7 +369,7 @@ impl WaveCell {
     fn weighted_compatible_stats_enumerate<'a>(
         &'a self,
         global_stats: &'a GlobalStats,
-    ) -> impl Iterator<Item = (PatternId, &'a PatternStats)> {
+    ) -> impl Iterator<Item = (PatternId, &'a PatternWeight)> {
         self.num_ways_to_become_each_pattern
             .iter()
             .zip(global_stats.pattern_stats_option_iter())
@@ -322,7 +530,7 @@ impl Propagator {
     fn clear(&mut self) {
         self.removed_patterns_to_propagate.clear();
     }
-    fn propagate<W: OutputWrap>(
+    fn propagate<W: Wrap>(
         &mut self,
         wave: &mut Wave,
         global_stats: &GlobalStats,
@@ -594,7 +802,7 @@ impl Context {
             self.num_cells_with_more_than_one_weighted_compatible_pattern = 0;
         }
     }
-    fn propagate<W: OutputWrap>(
+    fn propagate<W: Wrap>(
         &mut self,
         wave: &mut Wave,
         global_stats: &GlobalStats,
@@ -645,7 +853,7 @@ impl Context {
     }
 }
 
-pub struct Run<'a, W: OutputWrap> {
+pub struct Run<'a, W: Wrap> {
     context: &'a mut Context,
     wave: &'a mut Wave,
     global_stats: &'a GlobalStats,
@@ -685,7 +893,7 @@ impl<'a> WaveCellRef<'a> {
     }
 }
 
-impl<'a, W: OutputWrap> Run<'a, W> {
+impl<'a, W: Wrap> Run<'a, W> {
     fn propagate(&mut self) -> Result<(), PropagateError> {
         self.context
             .propagate::<W>(self.wave, self.global_stats)

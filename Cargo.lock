@@ -86,8 +86,7 @@ dependencies = [
 
 [[package]]
 name = "direction"
-version = "0.17.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+version = "0.17.0"
 dependencies = [
  "coord_2d 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -421,7 +420,7 @@ name = "wfc"
 version = "0.1.0"
 dependencies = [
  "coord_2d 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "direction 0.17.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "direction 0.17.0",
  "grid_2d 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.20.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -461,7 +460,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum crossbeam-epoch 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "927121f5407de9956180ff5e936fe3cf4324279280001cd56b669d28ee7e9150"
 "checksum crossbeam-utils 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "2760899e32a1d58d5abb31129f8fae5de75220bc2176e77ff7c627ae45c918d9"
 "checksum deflate 0.7.19 (registry+https://github.com/rust-lang/crates.io-index)" = "8a6abb26e16e8d419b5c78662aa9f82857c2386a073da266840e474d5055ec86"
-"checksum direction 0.17.2 (registry+https://github.com/rust-lang/crates.io-index)" = "d07884bcd893cedd87f470bd5d987de4ee59c63817e94d6b14d20ff41990e38d"
 "checksum either 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3be565ca5c557d7f59e7cfcf1844f9e3033650c929c6566f511e8005f205c1d0"
 "checksum fuchsia-zircon 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "2e9763c69ebaae630ba35f74888db465e49e259ba1bc0eda7d06f4a067615d82"
 "checksum fuchsia-zircon-sys 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "3dcaa9ae7725d12cdb85b3ad99a434db70b468c09ded17e012d86b5c1010f7a7"

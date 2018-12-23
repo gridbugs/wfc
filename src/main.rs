@@ -6,30 +6,29 @@ extern crate image;
 extern crate rand;
 extern crate rand_xorshift;
 
-mod context;
-mod pattern;
 mod tiled_slice;
+mod wfc;
 mod wrap;
 
-use context::*;
 use coord_2d::{Coord, Size};
-use direction::{CardinalDirection, CardinalDirectionTable};
+use direction::{CardinalDirection, CardinalDirectionTable, CardinalDirections};
 use grid_2d::coord_system::XThenYIter;
 use grid_2d::Grid;
 use hashbrown::HashMap;
 use image::{DynamicImage, Rgb, RgbImage};
-use pattern::{GlobalStats, PatternId, PatternStats, PatternTable};
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
+use std::num::NonZeroU32;
 use tiled_slice::*;
+use wfc::*;
 use wrap::*;
 
-pub fn are_patterns_compatible(
+pub fn are_patterns_compatible<T: PartialEq>(
     a: Coord,
     b: Coord,
     b_offset_direction: CardinalDirection,
     pattern_size: Size,
-    grid: &Grid<Colour>,
+    grid: &Grid<T>,
 ) -> bool {
     let (overlap_size_to_sub, a_offset, b_offset) = match b_offset_direction {
         CardinalDirection::North => (Size::new(0, 1), Coord::new(0, 0), Coord::new(0, 1)),
@@ -249,6 +248,27 @@ impl PatternTable_ {
             maybe_id_grid.get_checked(coord).unwrap().clone()
         })
     }
+    fn compatible_patterns<'a, T: PartialEq>(
+        &'a self,
+        pattern: &'a Pattern,
+        pattern_size: Size,
+        image: &'a Grid<T>,
+        direction: CardinalDirection,
+    ) -> impl 'a + Iterator<Item = PatternId> {
+        self.patterns
+            .iter()
+            .enumerate()
+            .filter(move |(_id, other)| {
+                are_patterns_compatible(
+                    pattern.coords[0],
+                    other.coords[0],
+                    direction,
+                    pattern_size,
+                    image,
+                )
+            })
+            .map(|(id, _other)| id as PatternId)
+    }
 }
 
 fn rng_from_integer_seed(seed: u128) -> XorShiftRng {
@@ -290,40 +310,26 @@ fn main() {
     let bottom_left_corner_id = *id_grid.get_checked(bottom_left_corner_coord);
     let sprout_id = *id_grid.get_checked(Coord::new(7, 21));
     let flower_id = *id_grid.get_checked(Coord::new(4, 1));
-    pattern_table.set_count(bottom_left_corner_id, 0);
-    let stats_per_pattern = pattern_table
-        .patterns
-        .iter()
-        .map(|p| PatternStats::from_u32_weight(p.count))
-        .collect::<PatternTable<_>>();
 
-    let compatibility_per_pattern = pattern_table
+    pattern_table.set_count(bottom_left_corner_id, 0);
+
+    let pattern_descriptions = pattern_table
         .patterns
         .iter()
-        .map(|a_info| {
-            let mut direction_table = CardinalDirectionTable::default();
-            for direction in direction::CardinalDirections {
-                *direction_table.get_mut(direction) = pattern_table
-                    .patterns
-                    .iter()
-                    .enumerate()
-                    .filter(|(_id, b_info)| {
-                        are_patterns_compatible(
-                            a_info.coords[0],
-                            b_info.coords[0],
-                            direction,
-                            pattern_size,
-                            &image_grid.grid,
-                        )
-                    })
-                    .map(|(id, _info)| id as PatternId)
+        .map(|p| {
+            let weight = NonZeroU32::new(p.count);
+            let mut allowed_neighbours = CardinalDirectionTable::default();
+            for direction in CardinalDirections {
+                allowed_neighbours[direction] = pattern_table
+                    .compatible_patterns(p, pattern_size, &image_grid.grid, direction)
                     .collect::<Vec<_>>();
             }
-            direction_table
+            PatternDescription::new(weight, allowed_neighbours)
         })
         .collect::<PatternTable<_>>();
+
     let output = {
-        let global_stats = GlobalStats::new(stats_per_pattern, compatibility_per_pattern);
+        let global_stats = GlobalStats::new(pattern_descriptions);
         let mut wave = Wave::new(output_size);
         'generate: loop {
             let mut context = Context::new();
@@ -363,12 +369,6 @@ fn main() {
                     Err(PropagateError::Contradiction) => break 'inner,
                 }
             }
-
-            /*
-            match run.collapse(&mut rng) {
-                Ok(()) => break,
-                Err(PropagateError::Contradiction) => (),
-            } */
         }
 
         let end_time = ::std::time::Instant::now();

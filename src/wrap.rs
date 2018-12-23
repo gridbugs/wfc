@@ -1,6 +1,6 @@
 use coord_2d::{Coord, Size};
 
-pub trait OutputWrap {
+pub trait Wrap {
     fn normalize_coord(coord: Coord, size: Size) -> Option<Coord>;
 }
 
@@ -9,7 +9,7 @@ pub struct WrapX;
 pub struct WrapY;
 pub struct WrapXY;
 
-impl OutputWrap for WrapNone {
+impl Wrap for WrapNone {
     fn normalize_coord(coord: Coord, size: Size) -> Option<Coord> {
         if coord.is_valid(size) {
             Some(coord)
@@ -32,7 +32,7 @@ fn normalize_value(value: i32, size: u32) -> i32 {
     }
 }
 
-impl OutputWrap for WrapX {
+impl Wrap for WrapX {
     fn normalize_coord(coord: Coord, size: Size) -> Option<Coord> {
         if value_is_valid(coord.y, size.y()) {
             let x = normalize_value(coord.x, size.x());
@@ -43,13 +43,13 @@ impl OutputWrap for WrapX {
     }
 }
 
-impl OutputWrap for WrapXY {
+impl Wrap for WrapXY {
     fn normalize_coord(coord: Coord, size: Size) -> Option<Coord> {
         Some(coord.normalize(size))
     }
 }
 
-impl OutputWrap for WrapY {
+impl Wrap for WrapY {
     fn normalize_coord(coord: Coord, size: Size) -> Option<Coord> {
         if value_is_valid(coord.x, size.x()) {
             let y = normalize_value(coord.y, size.y());
