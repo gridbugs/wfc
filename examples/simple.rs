@@ -3,6 +3,7 @@ extern crate grid_2d;
 extern crate image;
 extern crate rand;
 extern crate rand_xorshift;
+#[macro_use]
 extern crate simon;
 extern crate wfc;
 
@@ -45,30 +46,21 @@ fn rng_from_integer_seed(seed: u128) -> XorShiftRng {
 
 fn main() {
     use simon::*;
-    let (seed, output_path): (u128, String) = args_all! {
+    let (seed, input_path, output_path): (u128, String, String) = args_all! {
         opt("s", "seed", "rng seed", "INT")
             .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen())),
+        opt_required("i", "input", "input path", "PATH"),
         opt_required("o", "output", "output path", "PATH"),
     }.with_help_default()
         .parse_env_default_or_exit();
     println!("seed: {}", seed);
+    let image = image::open(input_path).unwrap();
     let mut rng = rng_from_integer_seed(seed);
-    let image = image::load_from_memory(include_bytes!("flowers.png")).unwrap();
     let image_grid = image_to_grid(&image);
     let pattern_size = Size::new(3, 3);
     let output_size = Size::new(48, 48);
     let start_time = ::std::time::Instant::now();
     let mut overlapping_patterns = OverlappingPatterns::new(&image_grid, pattern_size);
-    let id_grid = overlapping_patterns.id_grid();
-    let bottom_left_corner_coord = Coord::new(0, image_grid.size().y() as i32 - 1);
-    let bottom_left_corner_id = *id_grid.get_checked(bottom_left_corner_coord);
-    let sprout_id = *id_grid.get_checked(Coord::new(7, 21));
-    let flower_id = *id_grid.get_checked(Coord::new(4, 1));
-
-    overlapping_patterns
-        .pattern_mut(bottom_left_corner_id)
-        .clear_count();
-
     let output = {
         let global_stats = overlapping_patterns.global_stats();
         let mut wave = Wave::new(output_size);
@@ -81,40 +73,13 @@ fn main() {
                 WrapXY,
                 &mut rng,
             );
-
-            let sprout_coord = Coord::new(
-                (rng.gen::<u32>() % output_size.width()) as i32,
-                output_size.height() as i32 - 2,
-            );
-
-            run.forbid_all_patterns_except(sprout_coord, sprout_id)
-                .unwrap();
-
-            for i in 0..(output_size.width() as i32) {
-                let coord = Coord::new(i, output_size.height() as i32 - 1);
-                run.forbid_all_patterns_except(coord, bottom_left_corner_id)
-                    .unwrap();
-            }
-
-            for i in 0..8 {
-                for j in 0..(output_size.width() as i32) {
-                    let coord = Coord::new(j, output_size.height() as i32 - 1 - i);
-                    run.forbid_pattern(coord, flower_id).unwrap();
-                }
-            }
-
-            'inner: loop {
-                match run.step(&mut rng) {
-                    Ok(Observe::Complete) => break 'generate,
-                    Ok(Observe::Incomplete) => (),
-                    Err(PropagateError::Contradiction) => break 'inner,
-                }
+            match run.collapse(&mut rng) {
+                Ok(()) => break,
+                Err(PropagateError::Contradiction) => continue,
             }
         }
-
         let end_time = ::std::time::Instant::now();
         println!("{:?}", end_time - start_time);
-
         Grid::new_fn(output_size, |coord| {
             if let Ok(pattern_id) = wave.get_checked(coord).chosen_pattern_id() {
                 image_grid
@@ -127,6 +92,5 @@ fn main() {
             }
         })
     };
-
     grid_to_image(&output).save(output_path).unwrap();
 }
