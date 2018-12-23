@@ -5,20 +5,16 @@ extern crate hashbrown;
 extern crate image;
 extern crate rand;
 extern crate rand_xorshift;
-
-mod overlapping;
-mod tiled_slice;
-mod wfc;
-mod wrap;
+extern crate wfc;
 
 use coord_2d::{Coord, Size};
 use grid_2d::Grid;
 use image::{DynamicImage, Rgb, RgbImage};
-use overlapping::OverlappingPatterns;
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
+use wfc::overlapping::OverlappingPatterns;
+use wfc::wrap::*;
 use wfc::*;
-use wrap::*;
 
 fn image_to_grid(image: &DynamicImage) -> Grid<Rgb<u8>> {
     let rgb_image = image.to_rgb();
