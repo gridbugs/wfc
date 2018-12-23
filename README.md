@@ -1,14 +1,14 @@
 # Wave Function Collapse
 
-A library for generating images which are *similar* to other images.  *Similar*
-is defined as both:
+A rust library for generating images which are *similar* to other images.
+*Similar* is defined as both:
  - *strict locally similar*: every small (typically 3x3) pattern in the output
    image appears somewhere in the input image.
  - *loose globally similar*: the distribution of small patterns in the output
    image is roughly the same as the distribution of small patterns in the input
    image.
 
-This is based on 
+This is based on https://github.com/mxgmn/WaveFunctionCollapse
 
 ## Example
 

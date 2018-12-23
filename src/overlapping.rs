@@ -164,16 +164,8 @@ mod test {
     use grid_2d::Grid;
     #[test]
     fn compatibile_patterns() {
-        let r = Colour {
-            r: 255,
-            g: 0,
-            b: 0,
-        };
-        let b = Colour {
-            r: 0,
-            g: 0,
-            b: 255,
-        };
+        let r = 0;
+        let b = 1;
         let array = [[r, b, b], [b, r, b]];
         let grid = Grid::new_fn(Size::new(3, 2), |coord| {
             array[coord.y as usize][coord.x as usize]

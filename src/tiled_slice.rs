@@ -39,6 +39,13 @@ where
             size,
         }
     }
+    fn _get(&self, coord: Coord) -> Option<&T> {
+        if coord.is_valid(self.size) {
+            Some(self.grid.get_tiled(self.offset + coord))
+        } else {
+            None
+        }
+    }
 
     pub fn offset(&self) -> Coord {
         self.offset
@@ -85,8 +92,8 @@ mod test {
     #[test]
     fn tiling() {
         let grid = Grid::new_fn(Size::new(4, 4), |coord| coord);
-        let slice = new(&grid, Coord::new(-1, -1), Size::new(2, 2));
-        let value = *slice.get(Coord::new(0, 1)).unwrap();
+        let slice = TiledGridSlice::new(&grid, Coord::new(-1, -1), Size::new(2, 2));
+        let value = *slice._get(Coord::new(0, 1)).unwrap();
         assert_eq!(value, Coord::new(3, 0));
     }
     #[test]
@@ -94,9 +101,9 @@ mod test {
         let mut grid = Grid::new_fn(Size::new(4, 4), |_| 0);
         *grid.get_mut(Coord::new(3, 3)).unwrap() = 1;
         let size = Size::new(2, 2);
-        let a = new(&grid, Coord::new(0, 0), size);
-        let b = new(&grid, Coord::new(2, 2), size);
-        let c = new(&grid, Coord::new(0, 2), size);
+        let a = TiledGridSlice::new(&grid, Coord::new(0, 0), size);
+        let b = TiledGridSlice::new(&grid, Coord::new(2, 2), size);
+        let c = TiledGridSlice::new(&grid, Coord::new(0, 2), size);
         let mut set = HashSet::new();
         set.insert(a);
         set.insert(b);
