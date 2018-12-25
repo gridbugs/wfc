@@ -214,7 +214,7 @@ impl GlobalStats {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 struct WaveCellStats {
     num_weighted_compatible_patterns: u32,
     // n0 + n1 + n2 + ...
@@ -862,27 +862,42 @@ pub struct WaveCellRef<'a> {
     global_stats: &'a GlobalStats,
 }
 
+pub enum WaveCellRefWeight {
+    Weight(u32),
+    SingleNonWeightedPattern,
+}
+
 impl<'a> WaveCellRef<'a> {
     pub fn sum_compatible_pattern_weight(&self) -> u32 {
         self.wave_cell.stats.sum_compatible_pattern_weight
     }
     pub fn enumerate_compatible_pattern_weights(
         &self,
-    ) -> impl 'a + Iterator<Item = (PatternId, u32)> {
+    ) -> impl 'a + Iterator<Item = (PatternId, WaveCellRefWeight)> {
+        let num_compatible_patterns = self.wave_cell.num_compatible_patterns;
         self.wave_cell
             .num_ways_to_become_each_pattern
             .iter()
             .zip(self.global_stats.pattern_stats_option_iter())
             .enumerate()
             .filter_map(
-                |(pattern_id_usize, (num_ways_to_become_pattern, pattern_stats))| {
+                move |(pattern_id_usize, (num_ways_to_become_pattern, pattern_stats))| {
                     if num_ways_to_become_pattern.is_zero() {
                         None
                     } else {
                         let pattern_id = pattern_id_usize as PatternId;
-                        let weight = pattern_stats
+                        let weight = match pattern_stats
                             .map(|pattern_stats| pattern_stats.weight())
-                            .unwrap_or(0);
+                        {
+                            Some(weight) => WaveCellRefWeight::Weight(weight),
+                            None => {
+                                if num_compatible_patterns == 1 {
+                                    WaveCellRefWeight::SingleNonWeightedPattern
+                                } else {
+                                    WaveCellRefWeight::Weight(0)
+                                }
+                            }
+                        };
                         Some((pattern_id, weight))
                     }
                 },
@@ -957,6 +972,16 @@ impl<'a, W: Wrap> Run<'a, W> {
             wave_cell,
             global_stats: self.global_stats,
         }
+    }
+
+    pub fn wave_cell_ref_iter(&self) -> impl Iterator<Item = WaveCellRef> {
+        self.wave
+            .grid
+            .iter()
+            .map(move |wave_cell| WaveCellRef {
+                wave_cell,
+                global_stats: self.global_stats,
+            })
     }
 
     pub fn wave_cell_ref_enumerate(&self) -> impl Iterator<Item = (Coord, WaveCellRef)> {
