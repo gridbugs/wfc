@@ -119,7 +119,7 @@ fn main() {
                                 run.wave_cell_ref_iter()
                                     .zip(pixel_grid.iter_mut())
                                     .for_each(|(cell, mut pixel)| {
-                                        let sum =
+                                        let sum_compatible_pattern_weight =
                                             cell.sum_compatible_pattern_weight() as f32;
                                         use EnumerateCompatiblePatternWeights::*;
                                         let colour = match cell
@@ -159,7 +159,8 @@ fn main() {
                                                         pattern_colour_vec * weight as f32
                                                     })
                                                     .sum();
-                                                let normalized = weighted_sum / sum;
+                                                let normalized = weighted_sum
+                                                    / sum_compatible_pattern_weight;
                                                 [normalized.x, normalized.y, normalized.z]
                                             }
                                         };
