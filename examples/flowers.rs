@@ -38,24 +38,22 @@ fn grid_to_image(grid: &Grid<Rgb<u8>>) -> DynamicImage {
 
 fn rng_from_integer_seed(seed: u128) -> XorShiftRng {
     let mut seed_array = [0; 16];
-    seed_array
-        .iter_mut()
-        .enumerate()
-        .for_each(|(i, part)| {
-            *part = (seed >> (i * 8)) as u8 & 0xff;
-        });
+    seed_array.iter_mut().enumerate().for_each(|(i, part)| {
+        *part = (seed >> (i * 8)) as u8 & 0xff;
+    });
     XorShiftRng::from_seed(seed_array)
 }
 
 fn main() {
     use simon::*;
-    let (seed, output_path, animate): (u128, String, bool) = args_all! {
+    let (seed, output_path, animate): (u128, Option<String>, bool) = args_all! {
         opt("s", "seed", "rng seed", "INT")
             .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen())),
-        opt_required("o", "output", "output path", "PATH"),
+        opt("o", "output", "output path", "PATH"),
         flag("a", "animate", "animate"),
-    }.with_help_default()
-        .parse_env_default_or_exit();
+    }
+    .with_help_default()
+    .parse_env_default_or_exit();
     println!("seed: {}", seed);
     let mut rng = rng_from_integer_seed(seed);
     let image = image::load_from_memory(include_bytes!("flowers.png")).unwrap();
@@ -89,13 +87,8 @@ fn main() {
         let mut wave = Wave::new(output_size);
         'generate: loop {
             let mut context = Context::new();
-            let mut run = Run::new(
-                &mut context,
-                &mut wave,
-                &global_stats,
-                WrapXY,
-                &mut rng,
-            );
+            let mut run =
+                Run::new(&mut context, &mut wave, &global_stats, WrapXY, &mut rng);
 
             let sprout_coord = Coord::new(
                 (rng.gen::<u32>() % output_size.width()) as i32,
@@ -128,31 +121,53 @@ fn main() {
                                     .for_each(|(cell, mut pixel)| {
                                         let sum =
                                             cell.sum_compatible_pattern_weight() as f32;
-                                        let mut colour = vec3(0., 0., 0.);
-                                        for (pattern_id, weight) in
-                                            cell.enumerate_compatible_pattern_weights()
+                                        use EnumerateCompatiblePatternWeights::*;
+                                        let colour = match cell
+                                            .enumerate_compatible_pattern_weights()
                                         {
-                                            let Rgb { data: [r, g, b] } = image_grid
-                                                .get_checked(
-                                                    overlapping_patterns
-                                                        .pattern(pattern_id)
-                                                        .coord(),
-                                                )
-                                                .clone();
-                                            let pattern_colour =
-                                                vec3(r as f32, g as f32, b as f32) / 255.;
-                                            let weighted_colour = match weight {
-                                            WaveCellRefWeight::Weight(weight) => (pattern_colour * weight as f32) / sum,
-                                            WaveCellRefWeight::SingleNonWeightedPattern => pattern_colour,
+                                            MultipleCompatiblePatternsWithoutWeights
+                                            | NoCompatiblePattern => [1., 0., 0.],
+                                            SingleCompatiblePatternWithoutWeight(
+                                                pattern_id,
+                                            ) => {
+                                                let [r, g, b] = image_grid
+                                                    .get_checked(
+                                                        overlapping_patterns
+                                                            .pattern(pattern_id)
+                                                            .coord(),
+                                                    )
+                                                    .data;
+                                                [
+                                                    r as f32 / 255.,
+                                                    g as f32 / 255.,
+                                                    b as f32 / 255.,
+                                                ]
+                                            }
+                                            CompatiblePatternsWithWeights(iter) => {
+                                                let weighted_sum: cgmath::Vector3<f32> =
+                                                    iter.map(|(pattern_id, weight)| {
+                                                        let [r, g, b] = image_grid
+                                                            .get_checked(
+                                                                overlapping_patterns
+                                                                    .pattern(pattern_id)
+                                                                    .coord(),
+                                                            )
+                                                            .data;
+                                                        let pattern_colour_vec = vec3(
+                                                            r as f32, g as f32, b as f32,
+                                                        ) / 255.;
+                                                        pattern_colour_vec * weight as f32
+                                                    })
+                                                    .sum();
+                                                let normalized = weighted_sum / sum;
+                                                [normalized.x, normalized.y, normalized.z]
+                                            }
                                         };
-                                            colour += weighted_colour;
-                                        }
-                                        pixel
-                                            .set_colour_rgb(colour.x, colour.y, colour.z);
+                                        pixel.set_colour_array(colour);
                                     });
                             });
                             window.draw();
-                            if window.is_window_closed() {
+                            if window.is_closed() {
                                 return;
                             }
                         }
@@ -175,12 +190,12 @@ fn main() {
                     .get_checked(overlapping_patterns.pattern(pattern_id).coord())
                     .clone()
             } else {
-                Rgb {
-                    data: [255, 0, 0],
-                }
+                Rgb { data: [255, 0, 0] }
             }
         })
     };
 
-    grid_to_image(&output).save(output_path).unwrap();
+    if let Some(output_path) = output_path.as_ref() {
+        grid_to_image(&output).save(output_path).unwrap();
+    }
 }

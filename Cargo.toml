@@ -21,7 +21,7 @@ direction = "0.17"
 image = "0.20"
 rand_xorshift = "0.1"
 simon = "0.2"
-pixel_grid = "0.2"
+pixel_grid = "0.3"
 cgmath = "0.16"
 
 [[example]]
