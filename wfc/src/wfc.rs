@@ -510,16 +510,13 @@ impl Wave {
             grid: Grid::new_default(size),
         }
     }
-    pub fn size(&self) -> Size {
-        self.grid.size()
-    }
     fn init<R: Rng>(&mut self, global_stats: &GlobalStats, rng: &mut R) {
         self.grid
             .iter_mut()
             .for_each(|cell| cell.init(global_stats, rng));
     }
-    pub fn get_checked(&self, coord: Coord) -> &WaveCell {
-        self.grid.get_checked(coord)
+    pub fn grid(&self) -> &Grid<WaveCell> {
+        &self.grid
     }
 }
 
@@ -548,7 +545,7 @@ impl Propagator {
         num_cells_with_more_than_one_weighted_compatible_pattern: &mut u32,
     ) -> Result<(), Contradiction> {
         entropy_changes_by_coord.clear();
-        let wave_size = wave.size();
+        let wave_size = wave.grid.size();
         while let Some(removed_pattern) = self.removed_patterns_to_propagate.pop() {
             for direction in CardinalDirections {
                 let coord_to_update = if let Some(coord_to_update) = W::normalize_coord(
@@ -797,7 +794,7 @@ impl Context {
         self.entropy_changes_by_coord.clear();
         if global_stats.num_weighted_patterns() > 1 {
             self.num_cells_with_more_than_one_weighted_compatible_pattern =
-                wave.size().count() as u32;
+                wave.grid.size().count() as u32;
             wave.grid.enumerate().for_each(|(coord, cell)| {
                 self.observer.entropy_priority_queue.push(CoordEntropy {
                     coord,

@@ -26,10 +26,7 @@ fn are_patterns_compatible<T: PartialEq>(
     let b_overlap = b + b_offset;
     let a_slice = TiledGridSlice::new(grid, a_overlap, overlap_size);
     let b_slice = TiledGridSlice::new(grid, b_overlap, overlap_size);
-    a_slice
-        .iter()
-        .zip(b_slice.iter())
-        .all(|(a, b)| a == b)
+    a_slice.iter().zip(b_slice.iter()).all(|(a, b)| a == b)
 }
 
 #[derive(Debug, Default)]
@@ -47,10 +44,10 @@ impl Pattern {
     }
 }
 
-pub struct OverlappingPatterns<'a, T: 'a + Eq + Clone + Hash> {
+pub struct OverlappingPatterns<T: Eq + Clone + Hash> {
     pattern_table: PatternTable<Pattern>,
     pattern_size: Size,
-    grid: &'a Grid<T>,
+    grid: Grid<T>,
 }
 
 struct PatternIter<'a, T> {
@@ -76,33 +73,41 @@ impl<'a, T> PatternIter<'a, T> {
     }
 }
 
-impl<'a, T: Eq + Clone + Hash> OverlappingPatterns<'a, T> {
-    pub fn new(grid: &'a Grid<T>, pattern_size: Size) -> Self {
-        let mut pattern_map = HashMap::new();
-        PatternIter::new(grid, pattern_size).for_each(|pattern_slice| {
-            let pattern = pattern_map
-                .entry(pattern_slice.clone())
-                .or_insert_with(Pattern::default);
-            pattern.coords.push(pattern_slice.offset());
-            pattern.count += 1;
-        });
-        let mut patterns = pattern_map
-            .drain()
-            .map(|(_, pattern)| pattern)
-            .collect::<Vec<_>>();
-        patterns.sort_by_key(|pattern| pattern.coord());
-        let pattern_table = PatternTable::from_vec(patterns);
+impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
+    pub fn new(grid: Grid<T>, pattern_size: Size) -> Self {
+        let pattern_table = {
+            let mut pattern_map = HashMap::new();
+            PatternIter::new(&grid, pattern_size).for_each(|pattern_slice| {
+                let pattern = pattern_map
+                    .entry(pattern_slice.clone())
+                    .or_insert_with(Pattern::default);
+                pattern.coords.push(pattern_slice.offset());
+                pattern.count += 1;
+            });
+            let mut patterns = pattern_map
+                .drain()
+                .map(|(_, pattern)| pattern)
+                .collect::<Vec<_>>();
+            patterns.sort_by_key(|pattern| pattern.coord());
+            PatternTable::from_vec(patterns)
+        };
         Self {
             pattern_table,
             pattern_size,
             grid,
         }
     }
+    pub fn grid(&self) -> &Grid<T> {
+        &self.grid
+    }
     pub fn pattern(&self, pattern_id: PatternId) -> &Pattern {
         &self.pattern_table[pattern_id]
     }
     pub fn pattern_mut(&mut self, pattern_id: PatternId) -> &mut Pattern {
         &mut self.pattern_table[pattern_id]
+    }
+    pub fn pattern_top_left_value(&self, pattern_id: PatternId) -> &T {
+        self.grid.get_checked(self.pattern(pattern_id).coord())
     }
     pub fn id_grid(&self) -> Grid<PatternId> {
         let mut maybe_id_grid = Grid::new_clone(self.grid.size(), None);
@@ -131,7 +136,7 @@ impl<'a, T: Eq + Clone + Hash> OverlappingPatterns<'a, T> {
                     other.coord(),
                     direction,
                     self.pattern_size,
-                    self.grid,
+                    &self.grid,
                 )
             })
             .map(|(id, _other)| id)
@@ -143,9 +148,9 @@ impl<'a, T: Eq + Clone + Hash> OverlappingPatterns<'a, T> {
                 let weight = NonZeroU32::new(pattern.count);
                 let mut allowed_neighbours = CardinalDirectionTable::default();
                 for direction in CardinalDirections {
-                    allowed_neighbours[direction] = self.compatible_patterns(
-                        pattern, direction,
-                    ).collect::<Vec<_>>();
+                    allowed_neighbours[direction] = self
+                        .compatible_patterns(pattern, direction)
+                        .collect::<Vec<_>>();
                 }
                 PatternDescription::new(weight, allowed_neighbours)
             })

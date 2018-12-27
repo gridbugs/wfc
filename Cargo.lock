@@ -650,7 +650,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "pixel_grid"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "coord_2d 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1024,16 +1024,26 @@ dependencies = [
 name = "wfc"
 version = "0.1.0"
 dependencies = [
- "cgmath 0.16.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "coord_2d 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "direction 0.17.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "grid_2d 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "wfc_image"
+version = "0.1.0"
+dependencies = [
+ "cgmath 0.16.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "coord_2d 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "grid_2d 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.20.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "pixel_grid 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pixel_grid 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand_xorshift 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "simon 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wfc 0.1.0",
 ]
 
 [[package]]
@@ -1192,7 +1202,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)" = "f0802bff09003b291ba756dc7e79313e51cc31667e94afbe847def490424cde5"
 "checksum parking_lot_core 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ad7f7e6ebdc79edff6fdcb87a55b620174f7a989e3eb31b65231f4af57f00b8c"
 "checksum percent-encoding 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "31010dd2e1ac33d5b46a5b413495239882813e0369f8ed8a5e266f173602f831"
-"checksum pixel_grid 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "f528bad4b3f7f91a6c0dfc6af507e157406211fc5271f867b04b4fa9c37d3e2f"
+"checksum pixel_grid 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bc6456b1412ab6ef2f7636092e578500d29d505c97b485780cff62157bd0789c"
 "checksum pkg-config 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)" = "676e8eb2b1b4c9043511a9b7bea0915320d7e502b0a079fb03f9635a5252b18c"
 "checksum png 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f54b9600d584d3b8a739e1662a595fab051329eff43f20e7d8cc22872962145b"
 "checksum proc-macro2 0.4.24 (registry+https://github.com/rust-lang/crates.io-index)" = "77619697826f31a02ae974457af0b29b723e5619e113e9397b8b82c6bd253f09"

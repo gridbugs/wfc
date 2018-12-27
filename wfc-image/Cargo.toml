@@ -1,0 +1,30 @@
+[package]
+name = "wfc_image"
+description = "Create patterns for wfc using image files"
+version = "0.1.0"
+authors = ["Stephen Sherratt <stephen@sherra.tt>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/stevebob/wfc.git"
+repository = "https://github.com/stevebob/wfc.git"
+documentation = "https://docs.rs/wfc_image"
+
+
+[dependencies]
+wfc = { path = "../wfc", version = "0.1" }
+image = "0.20"
+coord_2d = "0.2"
+grid_2d = "0.11"
+
+[dev-dependencies]
+rand = "0.6"
+rand_xorshift = "0.1"
+simon = "0.2"
+pixel_grid = "0.4"
+cgmath = "0.16"
+
+[[example]]
+name = "simple"
+
+[[example]]
+name = "flowers"
