@@ -5,6 +5,8 @@ images based on image files, using the [image](https://crates.io/crates/image) c
 
 ## Examples
 
+Most of the sample images are taken from mxgmn/WaveFunctionCollapse.
+
 ### Simple
 
 This example generates an output image which is similar to the input image.
@@ -20,7 +22,6 @@ This example generates an output image which is similar to the input image.
 ![Bricks Output1](/images/bricks-output1.png)
 ![Bricks Output2](/images/bricks-output2.png)
 ![Bricks Output3](/images/bricks-output3.png)
-
 
 ### Flowers
 
@@ -39,8 +40,19 @@ properties. In this example:
 ![Flowers Output2](/images/flowers-output2.png)
 ![Flowers Output3](/images/flowers-output3.png)
 
-#### Animation
+### Animate
 
-Pass the flag `--animate` to view a realtime animation of the image being generated:
+This is a general tool for displaying in realtime, the generation of an image
+from a specified image file.
 
-![Flowers Animation](/images/flowers-animation.gif)
+![Link Input](/images/link.png)
+->
+![Link Animation](/images/link-animate.gif)
+
+![Sewers Input](/images/sewers.png)
+->
+![Sewers Animation](/images/sewers-animate.gif)
+
+![Cat Input](/images/cat.png)
+->
+![cat Animation](/images/cat-animate.gif)

@@ -1,17 +1,12 @@
-extern crate coord_2d;
 extern crate image;
 extern crate rand;
 extern crate rand_xorshift;
 extern crate simon;
-extern crate wfc;
 extern crate wfc_image;
 
-use coord_2d::Size;
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
-use wfc::wrap::*;
-use wfc::*;
-use wfc_image::ImagePatterns;
+use wfc_image::*;
 
 fn rng_from_integer_seed(seed: u128) -> XorShiftRng {
     let mut seed_array = [0; 16];
@@ -32,30 +27,21 @@ fn main() {
     .with_help_default()
     .parse_env_default_or_exit();
     println!("seed: {}", seed);
-    let image = image::open(input_path).unwrap();
-    let mut rng = rng_from_integer_seed(seed);
+    let input_image = image::open(input_path).unwrap();
     let pattern_size = Size::new(3, 3);
-    let image_patterns = ImagePatterns::new(&image, pattern_size);
     let output_size = Size::new(48, 48);
+    let mut rng = rng_from_integer_seed(seed);
     let start_time = ::std::time::Instant::now();
-    let wave = {
-        let global_stats = image_patterns.global_stats();
-        let mut wave = Wave::new(output_size);
-        'generate: loop {
-            let mut context = Context::new();
-            let mut run =
-                Run::new(&mut context, &mut wave, &global_stats, WrapXY, &mut rng);
-            match run.collapse(&mut rng) {
-                Ok(()) => break,
-                Err(PropagateError::Contradiction) => continue,
-            }
-        }
-        let end_time = ::std::time::Instant::now();
-        println!("{:?}", end_time - start_time);
-        wave
-    };
-    image_patterns
-        .image_from_wave(&wave)
-        .save(output_path)
-        .unwrap();
+    let output_image = generate_image_with_rng(
+        &input_image,
+        pattern_size,
+        output_size,
+        OnContradiction::RetryForever,
+        wrap::WrapXY,
+        &mut rng,
+    )
+    .unwrap();
+    let end_time = ::std::time::Instant::now();
+    println!("{:?}", end_time - start_time);
+    output_image.save(output_path).unwrap();
 }

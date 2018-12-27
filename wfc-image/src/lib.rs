@@ -1,13 +1,28 @@
 extern crate coord_2d;
 extern crate grid_2d;
 extern crate image;
+extern crate rand;
 extern crate wfc;
 
-use coord_2d::{Coord, Size};
+use coord_2d::Coord;
+pub use coord_2d::Size;
 use grid_2d::Grid;
 use image::{DynamicImage, Rgb, RgbImage};
+use rand::Rng;
 use wfc::overlapping::{OverlappingPatterns, Pattern};
-use wfc::{GlobalStats, PatternId, Wave, WaveCellRef};
+pub use wfc::wrap;
+use wfc::*;
+use wrap::Wrap;
+
+pub enum OnContradiction {
+    RetryForever,
+    RetryTimes(usize),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum CollapseWaveError {
+    TooManyContradictions,
+}
 
 pub struct ImagePatterns {
     overlapping_patterns: OverlappingPatterns<Rgb<u8>>,
@@ -30,16 +45,6 @@ impl ImagePatterns {
 
     pub fn set_empty_colour(&mut self, empty_colour: Rgb<u8>) {
         self.empty_colour = empty_colour;
-    }
-
-    pub fn to_image(&self) -> DynamicImage {
-        let grid = self.overlapping_patterns.grid();
-        let size = grid.size();
-        let mut rgb_image = RgbImage::new(size.width(), size.height());
-        for (Coord { x, y }, colour) in grid.enumerate() {
-            rgb_image.put_pixel(x as u32, y as u32, *colour);
-        }
-        DynamicImage::ImageRgb8(rgb_image)
     }
 
     pub fn image_from_wave(&self, wave: &Wave) -> DynamicImage {
@@ -107,4 +112,63 @@ impl ImagePatterns {
     pub fn global_stats(&self) -> GlobalStats {
         self.overlapping_patterns.global_stats()
     }
+
+    pub fn collapse_wave<W: Wrap, R: Rng>(
+        &self,
+        output_size: Size,
+        mut on_contradiction: OnContradiction,
+        wrap: W,
+        rng: &mut R,
+    ) -> Result<Wave, CollapseWaveError> {
+        let global_stats = self.global_stats();
+        let mut wave = Wave::new(output_size);
+        let mut context = Context::new();
+        'generate: loop {
+            let mut run =
+                Run::new(&mut context, &mut wave, &global_stats, wrap.clone(), rng);
+            match run.collapse(rng) {
+                Ok(()) => break,
+                Err(PropagateError::Contradiction) => match &mut on_contradiction {
+                    OnContradiction::RetryForever => (),
+                    OnContradiction::RetryTimes(ref mut num_retries) => {
+                        if *num_retries == 0 {
+                            return Err(CollapseWaveError::TooManyContradictions);
+                        }
+                        *num_retries -= 1;
+                    }
+                },
+            }
+        }
+        Ok(wave)
+    }
+}
+
+pub fn generate_image_with_rng<W: Wrap, R: Rng>(
+    image: &DynamicImage,
+    pattern_size: Size,
+    output_size: Size,
+    on_contradiction: OnContradiction,
+    wrap: W,
+    rng: &mut R,
+) -> Result<DynamicImage, CollapseWaveError> {
+    let image_patterns = ImagePatterns::new(image, pattern_size);
+    let wave = image_patterns.collapse_wave(output_size, on_contradiction, wrap, rng)?;
+    Ok(image_patterns.image_from_wave(&wave))
+}
+
+pub fn generate_image<W: Wrap>(
+    image: &DynamicImage,
+    pattern_size: Size,
+    output_size: Size,
+    on_contradiction: OnContradiction,
+    wrap: W,
+) -> Result<DynamicImage, CollapseWaveError> {
+    generate_image_with_rng(
+        image,
+        pattern_size,
+        output_size,
+        on_contradiction,
+        wrap,
+        &mut rand::thread_rng(),
+    )
 }

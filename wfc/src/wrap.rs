@@ -1,12 +1,19 @@
 use coord_2d::{Coord, Size};
 
-pub trait Wrap {
+pub trait Wrap: Clone {
     fn normalize_coord(coord: Coord, size: Size) -> Option<Coord>;
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct WrapNone;
+
+#[derive(Clone, Copy, Debug)]
 pub struct WrapX;
+
+#[derive(Clone, Copy, Debug)]
 pub struct WrapY;
+
+#[derive(Clone, Copy, Debug)]
 pub struct WrapXY;
 
 impl Wrap for WrapNone {
