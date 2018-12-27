@@ -8,7 +8,7 @@ images based on image files, using the [image](https://crates.io/crates/image) c
 
 ## Examples
 
-Most of the sample images are taken from mxgmn/WaveFunctionCollapse.
+Most of the sample images are taken from [mxgmn/WaveFunctionCollapse](https://github.com/mxgmn/WaveFunctionCollapse).
 
 ### Simple
 
@@ -18,13 +18,11 @@ This example generates an output image which is similar to the input image.
 ->
 ![Rooms Output1](/images/rooms-output1.png)
 ![Rooms Output2](/images/rooms-output2.png)
-![Rooms Output3](/images/rooms-output3.png)
 
 ![Bricks Input](/images/bricks.png)
 ->
 ![Bricks Output1](/images/bricks-output1.png)
 ![Bricks Output2](/images/bricks-output2.png)
-![Bricks Output3](/images/bricks-output3.png)
 
 ### Flowers
 
@@ -41,7 +39,6 @@ properties. In this example:
 ->
 ![Flowers Output1](/images/flowers-output1.png)
 ![Flowers Output2](/images/flowers-output2.png)
-![Flowers Output3](/images/flowers-output3.png)
 
 Pass the flag `--animate` to view a realtime animation of the image being generated:
 
