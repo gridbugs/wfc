@@ -40,7 +40,7 @@ properties. In this example:
 ![Flowers Output2](/images/flowers-output2.png)
 ![Flowers Output3](/images/flowers-output3.png)
 
-Pass the flag --animate to view a realtime animation of the image being generated:
+Pass the flag `--animate` to view a realtime animation of the image being generated:
 
 ![Flowers Animation](/images/flowers-animate.gif)
 
