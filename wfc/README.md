@@ -40,4 +40,4 @@ This shows the process of generating an image based on the sample flowers image 
 The colour of each pixel is the average of all colours which could be assigned to it,
 weighted by probability.
 
-![Flowers Animation](/images/flowers-animation.gif)
+![Flowers Animation](/images/flowers-animate.gif)
