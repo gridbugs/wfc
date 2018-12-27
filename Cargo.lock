@@ -989,7 +989,7 @@ dependencies = [
 
 [[package]]
 name = "wfc"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "coord_2d 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "direction 0.17.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1009,7 +1009,7 @@ dependencies = [
  "rand 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand_xorshift 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "simon 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "wfc 0.1.0",
+ "wfc 0.2.0",
 ]
 
 [[package]]

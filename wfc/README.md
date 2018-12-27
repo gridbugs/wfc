@@ -1,48 +1,43 @@
-# Wave Function Collapse for Image Files
+# Wave Function Collapse
 
-A rust library for generating images which are *similar* to other images.
+[![Version](https://img.shields.io/crates/v/wfc.svg)](https://crates.io/crates/wfc)
+[![Documentation](https://docs.rs/wfc/badge.svg)](https://docs.rs/wfc)
+
+Library for generating grids of values which are similar to a specified grid.
+A typical use case for this is procedurally-generated images, though it generalizes
+to any grid of values.
+
 *Similar* is defined as both:
- - *strict locally similar*: every small (typically 3x3) pattern in the output
+ - *strictly locally similar*: every small (typically 3x3) pattern in the output
    image appears somewhere in the input image.
- - *loose globally similar*: the distribution of small patterns in the output
+ - *loosely globally similar*: the distribution of small patterns in the output
    image is roughly the same as the distribution of small patterns in the input
    image.
 
-This is based on https://github.com/mxgmn/WaveFunctionCollapse
+Grids are populated using a constraint solver. For each cell, we store a probability
+distribution representing how likely that cell is to contain the top-left corner of
+possible pattern. Initially the probability of each pattern is based on its frequency
+in the sample image. Then, it repeatedly identifies the cell whose entropy is the lowest,
+and decides (randomly, weighted by probability distribution) which pattern to assign to
+the cell. This assignment may remove some candidate patterns from neighbouring cells,
+so it then updates candidate cells. This process of choosing a cell, assigning it a
+pattern, and propagating incompatible neighbours continues until either the entire grid
+is populated with values, or all the candidates are removed from a cell.
 
-## Examples
+## Example of Similar Images
 
-### Simple
-
-This example generates an output image which is similar to the input image.
-
-![Rooms Input](/examples/rooms.png)
-->
-![Rooms Output1](/images/rooms-output1.png)
-![Rooms Output2](/images/rooms-output2.png)
-![Rooms Output3](/images/rooms-output3.png)
-
-![Bricks Input](/examples/bricks.png)
-->
-![Bricks Output1](/images/bricks-output1.png)
-![Bricks Output2](/images/bricks-output2.png)
-![Bricks Output3](/images/bricks-output3.png)
-
-
-
-### Flowers
-
-It's also possible to manually restrict the output to encode specific
-properties. In this example:
- - The bottom row of patterns is set to be ground.
- - A sprout pattern is placed in a random position along the bottom of the
-   output.
- - Ground patterns are forbidden from being automatically chosen.
- - The flower pattern is forbidden to appear in the bottom few rows of output,
-   to enforce a minimum height of flowers.
-
-![Flowers Input](/examples/flowers.png)
+![Flowers Input](/images/flowers.png)
 ->
 ![Flowers Output1](/images/flowers-output1.png)
 ![Flowers Output2](/images/flowers-output2.png)
 ![Flowers Output3](/images/flowers-output3.png)
+
+For more image examples, see [wfc-image](https://github.com/stevebob/wfc/tree/master/wfc-image).
+
+## Animation
+
+This shows the process of generating an image based on the sample flowers image above.
+The colour of each pixel is the average of all colours which could be assigned to it,
+weighted by probability.
+
+![Flowers Animation](/images/flowers-animation.gif)

@@ -41,7 +41,7 @@ fn main() {
     let output_size = Size::new(48, 48);
     let window_spec = WindowSpec {
         title: "flowers".to_string(),
-        grid_size: output_size,
+        grid_size: output_size + Size::new(10, 10),
         cell_size: Size::new(8, 8),
     };
     let mut window = if animate {
@@ -61,60 +61,68 @@ fn main() {
         .pattern_mut(bottom_left_corner_id)
         .clear_count();
 
-    let wave = {
-        let global_stats = image_patterns.global_stats();
-        let mut wave = Wave::new(output_size);
-        'generate: loop {
-            let mut context = Context::new();
-            let mut run =
-                Run::new(&mut context, &mut wave, &global_stats, WrapXY, &mut rng);
-            let sprout_coord = Coord::new(
-                (rng.gen::<u32>() % output_size.width()) as i32,
-                output_size.height() as i32 - 2,
-            );
-            run.forbid_all_patterns_except(sprout_coord, sprout_id)
-                .unwrap();
-            for i in 0..(output_size.width() as i32) {
-                let coord = Coord::new(i, output_size.height() as i32 - 1);
-                run.forbid_all_patterns_except(coord, bottom_left_corner_id)
+    let wave = loop {
+        let wave = {
+            let global_stats = image_patterns.global_stats();
+            let mut wave = Wave::new(output_size);
+            'generate: loop {
+                let mut context = Context::new();
+                let mut run =
+                    Run::new(&mut context, &mut wave, &global_stats, WrapXY, &mut rng);
+                let sprout_coord = Coord::new(
+                    (rng.gen::<u32>() % output_size.width()) as i32,
+                    output_size.height() as i32 - 2,
+                );
+                run.forbid_all_patterns_except(sprout_coord, sprout_id)
                     .unwrap();
-            }
-            for i in 0..8 {
-                for j in 0..(output_size.width() as i32) {
-                    let coord = Coord::new(j, output_size.height() as i32 - 1 - i);
-                    run.forbid_pattern(coord, flower_id).unwrap();
+                for i in 0..(output_size.width() as i32) {
+                    let coord = Coord::new(i, output_size.height() as i32 - 1);
+                    run.forbid_all_patterns_except(coord, bottom_left_corner_id)
+                        .unwrap();
                 }
-            }
-            'inner: loop {
-                match run.step(&mut rng) {
-                    Ok(observe) => {
-                        if let Some(window) = window.as_mut() {
-                            window.with_pixel_grid(|mut pixel_grid| {
-                                run.wave_cell_ref_iter()
-                                    .zip(pixel_grid.iter_mut())
-                                    .for_each(|(cell, mut pixel)| {
-                                        let colour =
-                                            image_patterns.weighted_average_colour(&cell);
-                                        pixel.set_colour_array_u8(colour.data);
-                                    });
-                            });
-                            window.draw();
-                            if window.is_closed() {
-                                return;
+                for i in 0..8 {
+                    for j in 0..(output_size.width() as i32) {
+                        let coord = Coord::new(j, output_size.height() as i32 - 1 - i);
+                        run.forbid_pattern(coord, flower_id).unwrap();
+                    }
+                }
+                'inner: loop {
+                    match run.step(&mut rng) {
+                        Ok(observe) => {
+                            if let Some(window) = window.as_mut() {
+                                window.with_pixel_grid(|mut pixel_grid| {
+                                    run.wave_cell_ref_enumerate().for_each(
+                                        |(coord, cell)| {
+                                            let mut pixel = pixel_grid.get_checked_mut(
+                                                coord + Coord::new(1, 1),
+                                            );
+                                            let colour = image_patterns
+                                                .weighted_average_colour(&cell);
+                                            pixel.set_colour_array_u8(colour.data);
+                                        },
+                                    );
+                                });
+                                window.draw();
+                                if window.is_closed() {
+                                    return;
+                                }
+                            }
+                            match observe {
+                                Observe::Complete => break 'generate,
+                                Observe::Incomplete => (),
                             }
                         }
-                        match observe {
-                            Observe::Complete => break 'generate,
-                            Observe::Incomplete => (),
-                        }
+                        Err(PropagateError::Contradiction) => break 'inner,
                     }
-                    Err(PropagateError::Contradiction) => break 'inner,
                 }
             }
+            let end_time = ::std::time::Instant::now();
+            println!("{:?}", end_time - start_time);
+            wave
+        };
+        if false {
+            break wave;
         }
-        let end_time = ::std::time::Instant::now();
-        println!("{:?}", end_time - start_time);
-        wave
     };
     if let Some(output_path) = output_path.as_ref() {
         image_patterns
