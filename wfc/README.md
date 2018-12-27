@@ -1,4 +1,4 @@
-# Wave Function Collapse
+# Wave Function Collapse for Image Files
 
 A rust library for generating images which are *similar* to other images.
 *Similar* is defined as both:
@@ -17,7 +17,7 @@ This is based on https://github.com/mxgmn/WaveFunctionCollapse
 This example generates an output image which is similar to the input image.
 
 ![Rooms Input](/examples/rooms.png)
--> 
+->
 ![Rooms Output1](/images/rooms-output1.png)
 ![Rooms Output2](/images/rooms-output2.png)
 ![Rooms Output3](/images/rooms-output3.png)
