@@ -1,6 +1,4 @@
-extern crate cgmath;
 extern crate coord_2d;
-extern crate grid_2d;
 extern crate image;
 extern crate pixel_grid;
 extern crate rand;
@@ -9,14 +7,10 @@ extern crate simon;
 extern crate wfc;
 extern crate wfc_image;
 
-use cgmath::vec3;
 use coord_2d::{Coord, Size};
-use grid_2d::Grid;
-use image::Rgb;
 use pixel_grid::{Window, WindowSpec};
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
-use wfc::overlapping::OverlappingPatterns;
 use wfc::wrap::*;
 use wfc::*;
 use wfc_image::ImagePatterns;
