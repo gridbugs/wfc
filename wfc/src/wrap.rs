@@ -1,6 +1,7 @@
 use coord_2d::{Coord, Size};
 
-pub trait Wrap: Clone {
+pub trait Wrap: Clone + private::Sealed {
+    #[doc(hidden)]
     fn normalize_coord(coord: Coord, size: Size) -> Option<Coord>;
 }
 
@@ -65,6 +66,17 @@ impl Wrap for WrapY {
             None
         }
     }
+}
+
+mod private {
+    use super::*;
+
+    pub trait Sealed {}
+
+    impl Sealed for WrapX {}
+    impl Sealed for WrapY {}
+    impl Sealed for WrapXY {}
+    impl Sealed for WrapNone {}
 }
 
 #[cfg(test)]
