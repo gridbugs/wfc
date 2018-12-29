@@ -140,23 +140,27 @@ impl ImagePatterns {
     }
 }
 
+pub struct PatternSize(pub Size);
+pub struct OutputSize(pub Size);
+
 pub fn generate_image_with_rng<W: Wrap, R: Rng>(
     image: &DynamicImage,
-    pattern_size: Size,
-    output_size: Size,
+    pattern_size: PatternSize,
+    output_size: OutputSize,
     on_contradiction: OnContradiction,
     wrap: W,
     rng: &mut R,
 ) -> Result<DynamicImage, CollapseWaveError> {
-    let image_patterns = ImagePatterns::new(image, pattern_size);
-    let wave = image_patterns.collapse_wave(output_size, on_contradiction, wrap, rng)?;
+    let image_patterns = ImagePatterns::new(image, pattern_size.0);
+    let wave =
+        image_patterns.collapse_wave(output_size.0, on_contradiction, wrap, rng)?;
     Ok(image_patterns.image_from_wave(&wave))
 }
 
 pub fn generate_image<W: Wrap>(
     image: &DynamicImage,
-    pattern_size: Size,
-    output_size: Size,
+    pattern_size: PatternSize,
+    output_size: OutputSize,
     on_contradiction: OnContradiction,
     wrap: W,
 ) -> Result<DynamicImage, CollapseWaveError> {

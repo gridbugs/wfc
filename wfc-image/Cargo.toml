@@ -26,6 +26,9 @@ pixel_grid = "0.4"
 name = "simple"
 
 [[example]]
+name = "very_simple"
+
+[[example]]
 name = "flowers"
 
 [[example]]
