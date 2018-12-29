@@ -79,7 +79,8 @@ fn main() {
     let mut wave = Wave::new(output_size);
     let mut context = Context::new();
     'generate: loop {
-        let mut run = Run::new(&mut context, &mut wave, &global_stats, WrapXY, &mut rng);
+        let mut run =
+            RunBorrow::new(&mut context, &mut wave, &global_stats, WrapXY, &mut rng);
         if let Some(bottom_left_corner_id) = bottom_left_corner_id {
             for i in 0..(output_size.width() as i32) {
                 let coord = Coord::new(i, output_size.height() as i32 - 1);

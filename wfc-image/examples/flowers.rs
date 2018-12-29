@@ -67,7 +67,7 @@ fn main() {
         'generate: loop {
             let mut context = Context::new();
             let mut run =
-                Run::new(&mut context, &mut wave, &global_stats, WrapXY, &mut rng);
+                RunBorrow::new(&mut context, &mut wave, &global_stats, WrapXY, &mut rng);
             let sprout_coord = Coord::new(
                 (rng.gen::<u32>() % output_size.width()) as i32,
                 output_size.height() as i32 - 2,

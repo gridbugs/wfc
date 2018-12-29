@@ -852,7 +852,9 @@ impl Context {
     }
 }
 
-pub struct Run<'a, W: Wrap> {
+/// Represents a running instance of wfc which borrows its resources, making it
+/// possible to re-use memory across multiple runs.
+pub struct RunBorrow<'a, W: Wrap> {
     context: &'a mut Context,
     wave: &'a mut Wave,
     global_stats: &'a GlobalStats,
@@ -941,7 +943,25 @@ impl<'a> WaveCellRef<'a> {
     }
 }
 
-impl<'a, W: Wrap> Run<'a, W> {
+impl<'a, W: Wrap> RunBorrow<'a, W> {
+    pub fn new<R: Rng>(
+        context: &'a mut Context,
+        wave: &'a mut Wave,
+        global_stats: &'a GlobalStats,
+        output_wrap: W,
+        rng: &mut R,
+    ) -> Self {
+        let _ = output_wrap;
+        wave.init(global_stats, rng);
+        context.init(wave, global_stats);
+        Self {
+            context,
+            wave,
+            global_stats,
+            output_wrap: PhantomData,
+        }
+    }
+
     fn propagate(&mut self) -> Result<(), PropagateError> {
         self.context.propagate::<W>(self.wave, self.global_stats)
     }
@@ -1023,22 +1043,91 @@ impl<'a, W: Wrap> Run<'a, W> {
             (coord, wave_cell_ref)
         })
     }
+}
+
+/// Represents a running instance of wfc which allocates and owns its resources
+pub struct RunOwn<'a, W: Wrap> {
+    context: Context,
+    wave: Wave,
+    global_stats: &'a GlobalStats,
+    output_wrap: PhantomData<W>,
+}
+
+pub enum OwnedObserve<'a, W: Wrap> {
+    Complete(Wave),
+    Incomplete(RunOwn<'a, W>),
+}
+
+pub enum OwnedPropagateError<'a, W: Wrap> {
+    Contradiction(RunOwn<'a, W>),
+}
+
+impl<'a, W: Wrap> RunOwn<'a, W> {
+    fn borrow_mut(&mut self) -> RunBorrow<W> {
+        RunBorrow {
+            context: &mut self.context,
+            wave: &mut self.wave,
+            global_stats: self.global_stats,
+            output_wrap: self.output_wrap,
+        }
+    }
 
     pub fn new<R: Rng>(
-        context: &'a mut Context,
-        wave: &'a mut Wave,
+        output_size: Size,
         global_stats: &'a GlobalStats,
         output_wrap: W,
         rng: &mut R,
     ) -> Self {
         let _ = output_wrap;
+        let mut wave = Wave::new(output_size);
+        let mut context = Context::new();
         wave.init(global_stats, rng);
-        context.init(wave, global_stats);
+        context.init(&wave, global_stats);
         Self {
             context,
             wave,
             global_stats,
             output_wrap: PhantomData,
         }
+    }
+
+    fn reset<R: Rng>(&mut self, rng: &mut R) {
+        self.wave.init(self.global_stats, rng);
+        self.context.init(&self.wave, self.global_stats);
+    }
+
+    pub fn forbid_all_patterns_except(
+        &mut self,
+        coord: Coord,
+        pattern_id: PatternId,
+    ) -> Result<(), PropagateError> {
+        self.borrow_mut()
+            .forbid_all_patterns_except(coord, pattern_id)
+    }
+
+    pub fn forbid_pattern(
+        &mut self,
+        coord: Coord,
+        pattern_id: PatternId,
+    ) -> Result<(), PropagateError> {
+        self.borrow_mut().forbid_pattern(coord, pattern_id)
+    }
+
+    pub fn step<R: Rng>(&mut self, rng: &mut R) -> Result<Observe, PropagateError> {
+        let result = self.borrow_mut().step(rng);
+        if result.is_err() {
+            self.reset(rng);
+        }
+        result
+    }
+    pub fn collapse<R: Rng>(&mut self, rng: &mut R) -> Result<(), PropagateError> {
+        let result = self.borrow_mut().collapse(rng);
+        if result.is_err() {
+            self.reset(rng);
+        }
+        result
+    }
+    pub fn into_wave(self) -> Wave {
+        self.wave
     }
 }

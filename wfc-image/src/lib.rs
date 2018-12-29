@@ -121,11 +121,8 @@ impl ImagePatterns {
         rng: &mut R,
     ) -> Result<Wave, CollapseWaveError> {
         let global_stats = self.global_stats();
-        let mut wave = Wave::new(output_size);
-        let mut context = Context::new();
-        'generate: loop {
-            let mut run =
-                Run::new(&mut context, &mut wave, &global_stats, wrap.clone(), rng);
+        let mut run = RunOwn::new(output_size, &global_stats, wrap, rng);
+        loop {
             match run.collapse(rng) {
                 Ok(()) => break,
                 Err(PropagateError::Contradiction) => match &mut on_contradiction {
@@ -139,7 +136,7 @@ impl ImagePatterns {
                 },
             }
         }
-        Ok(wave)
+        Ok(run.into_wave())
     }
 }
 
