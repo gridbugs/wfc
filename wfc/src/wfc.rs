@@ -1028,9 +1028,10 @@ impl<'a, W: Wrap> Run<'a, W> {
         context: &'a mut Context,
         wave: &'a mut Wave,
         global_stats: &'a GlobalStats,
-        _output_wrap: W,
+        output_wrap: W,
         rng: &mut R,
     ) -> Self {
+        let _ = output_wrap;
         wave.init(global_stats, rng);
         context.init(wave, global_stats);
         Self {
