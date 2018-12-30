@@ -5,6 +5,7 @@ extern crate hashbrown;
 extern crate rand;
 
 pub mod overlapping;
+pub mod retry;
 mod tiled_slice;
 mod wfc;
 pub mod wrap;

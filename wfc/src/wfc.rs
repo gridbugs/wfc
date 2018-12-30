@@ -3,6 +3,7 @@ use direction::{CardinalDirection, CardinalDirectionTable, CardinalDirections};
 use grid_2d::Grid;
 use hashbrown::HashMap;
 use rand::Rng;
+use retry;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::iter;
@@ -1043,6 +1044,14 @@ impl<'a, W: Wrap> RunBorrow<'a, W> {
             (coord, wave_cell_ref)
         })
     }
+
+    pub fn collapse_retrying<R, RB>(&mut self, mut retry: RB, rng: &mut R) -> RB::Return
+    where
+        R: Rng,
+        RB: retry::RetryBorrow,
+    {
+        retry.retry(self, rng)
+    }
 }
 
 /// Represents a running instance of wfc which allocates and owns its resources
@@ -1120,6 +1129,32 @@ impl<'a, W: Wrap> RunOwn<'a, W> {
         }
         result
     }
+
+    pub fn wave_cell_ref(&self, coord: Coord) -> WaveCellRef {
+        let wave_cell = self.wave.grid.get_checked(coord);
+        WaveCellRef {
+            wave_cell,
+            global_stats: self.global_stats,
+        }
+    }
+
+    pub fn wave_cell_ref_iter(&self) -> impl Iterator<Item = WaveCellRef> {
+        self.wave.grid.iter().map(move |wave_cell| WaveCellRef {
+            wave_cell,
+            global_stats: self.global_stats,
+        })
+    }
+
+    pub fn wave_cell_ref_enumerate(&self) -> impl Iterator<Item = (Coord, WaveCellRef)> {
+        self.wave.grid.enumerate().map(move |(coord, wave_cell)| {
+            let wave_cell_ref = WaveCellRef {
+                wave_cell,
+                global_stats: self.global_stats,
+            };
+            (coord, wave_cell_ref)
+        })
+    }
+
     pub fn collapse<R: Rng>(&mut self, rng: &mut R) -> Result<(), PropagateError> {
         let result = self.borrow_mut().collapse(rng);
         if result.is_err() {
@@ -1127,7 +1162,16 @@ impl<'a, W: Wrap> RunOwn<'a, W> {
         }
         result
     }
+
     pub fn into_wave(self) -> Wave {
         self.wave
+    }
+
+    pub fn collapse_retrying<R, RO>(self, mut retry: RO, rng: &mut R) -> RO::Return
+    where
+        R: Rng,
+        RO: retry::RetryOwn,
+    {
+        retry.retry(self, rng)
     }
 }

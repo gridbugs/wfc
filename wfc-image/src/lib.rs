@@ -10,18 +10,24 @@ use grid_2d::Grid;
 use image::{DynamicImage, Rgb, RgbImage};
 use rand::Rng;
 use wfc::overlapping::{OverlappingPatterns, Pattern};
+use wfc::retry as wfc_retry;
 pub use wfc::wrap;
 use wfc::*;
 use wrap::Wrap;
 
-pub enum OnContradiction {
-    RetryForever,
-    RetryTimes(usize),
-}
+pub mod retry {
+    pub use wfc_retry::RetryOwn as Retry;
+    pub use wfc_retry::{Forever, NumTimes};
 
-#[derive(Debug, Clone, Copy)]
-pub enum CollapseWaveError {
-    TooManyContradictions,
+    pub trait ImageRetry: Retry {
+        type ImageReturn;
+        #[doc(hidden)]
+        fn image_return(
+            r: Self::Return,
+            image_patterns: &super::ImagePatterns,
+        ) -> Self::ImageReturn;
+    }
+
 }
 
 pub struct ImagePatterns {
@@ -113,63 +119,74 @@ impl ImagePatterns {
         self.overlapping_patterns.global_stats()
     }
 
-    pub fn collapse_wave<W: Wrap, R: Rng>(
+    pub fn collapse_wave_retrying<W, RT, R>(
         &self,
         output_size: Size,
-        mut on_contradiction: OnContradiction,
         wrap: W,
+        retry: RT,
         rng: &mut R,
-    ) -> Result<Wave, CollapseWaveError> {
+    ) -> RT::Return
+    where
+        W: Wrap,
+        RT: retry::Retry,
+        R: Rng,
+    {
         let global_stats = self.global_stats();
-        let mut run = RunOwn::new(output_size, &global_stats, wrap, rng);
-        loop {
-            match run.collapse(rng) {
-                Ok(()) => break,
-                Err(PropagateError::Contradiction) => match &mut on_contradiction {
-                    OnContradiction::RetryForever => (),
-                    OnContradiction::RetryTimes(ref mut num_retries) => {
-                        if *num_retries == 0 {
-                            return Err(CollapseWaveError::TooManyContradictions);
-                        }
-                        *num_retries -= 1;
-                    }
-                },
-            }
-        }
-        Ok(run.into_wave())
+        let run = RunOwn::new(output_size, &global_stats, wrap, rng);
+        run.collapse_retrying(retry, rng)
     }
 }
 
 pub struct PatternSize(pub Size);
 pub struct OutputSize(pub Size);
 
-pub fn generate_image_with_rng<W: Wrap, R: Rng>(
-    image: &DynamicImage,
-    pattern_size: PatternSize,
-    output_size: OutputSize,
-    on_contradiction: OnContradiction,
-    wrap: W,
-    rng: &mut R,
-) -> Result<DynamicImage, CollapseWaveError> {
-    let image_patterns = ImagePatterns::new(image, pattern_size.0);
-    let wave =
-        image_patterns.collapse_wave(output_size.0, on_contradiction, wrap, rng)?;
-    Ok(image_patterns.image_from_wave(&wave))
+impl retry::ImageRetry for retry::Forever {
+    type ImageReturn = DynamicImage;
+    fn image_return(
+        r: Self::Return,
+        image_patterns: &ImagePatterns,
+    ) -> Self::ImageReturn {
+        image_patterns.image_from_wave(&r)
+    }
 }
 
-pub fn generate_image<W: Wrap>(
+pub fn generate_image_with_rng<W, IR, R>(
     image: &DynamicImage,
     pattern_size: PatternSize,
     output_size: OutputSize,
-    on_contradiction: OnContradiction,
     wrap: W,
-) -> Result<DynamicImage, CollapseWaveError> {
+    retry: IR,
+    rng: &mut R,
+) -> IR::ImageReturn
+where
+    W: Wrap,
+    IR: retry::ImageRetry,
+    R: Rng,
+{
+    let image_patterns = ImagePatterns::new(image, pattern_size.0);
+    IR::image_return(
+        image_patterns.collapse_wave_retrying(output_size.0, wrap, retry, rng),
+        &image_patterns,
+    )
+}
+
+pub fn generate_image<W, IR>(
+    image: &DynamicImage,
+    pattern_size: PatternSize,
+    output_size: OutputSize,
+    wrap: W,
+    retry: IR,
+) -> IR::ImageReturn
+where
+    W: Wrap,
+    IR: retry::ImageRetry,
+{
     generate_image_with_rng(
         image,
         pattern_size,
         output_size,
-        on_contradiction,
         wrap,
+        retry,
         &mut rand::thread_rng(),
     )
 }

@@ -18,9 +18,8 @@ fn main() {
         &input_image,
         pattern_size,
         output_size,
-        OnContradiction::RetryForever,
         wrap::WrapXY,
-    )
-    .unwrap();
+        retry::Forever,
+    );
     output_image.save(output_path).unwrap();
 }

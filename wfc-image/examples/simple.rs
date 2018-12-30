@@ -28,19 +28,18 @@ fn main() {
     .parse_env_default_or_exit();
     println!("seed: {}", seed);
     let input_image = image::open(input_path).unwrap();
-    let pattern_size = Size::new(3, 3);
-    let output_size = Size::new(48, 48);
+    let pattern_size = PatternSize(Size::new(3, 3));
+    let output_size = OutputSize(Size::new(48, 48));
     let mut rng = rng_from_integer_seed(seed);
     let start_time = ::std::time::Instant::now();
     let output_image = generate_image_with_rng(
         &input_image,
         pattern_size,
         output_size,
-        OnContradiction::RetryForever,
         wrap::WrapXY,
+        retry::Forever,
         &mut rng,
-    )
-    .unwrap();
+    );
     let end_time = ::std::time::Instant::now();
     println!("{:?}", end_time - start_time);
     output_image.save(output_path).unwrap();
