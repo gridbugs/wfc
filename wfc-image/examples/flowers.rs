@@ -15,17 +15,9 @@ use wfc::wrap::*;
 use wfc::*;
 use wfc_image::ImagePatterns;
 
-fn rng_from_integer_seed(seed: u128) -> XorShiftRng {
-    let mut seed_array = [0; 16];
-    seed_array.iter_mut().enumerate().for_each(|(i, part)| {
-        *part = (seed >> (i * 8)) as u8 & 0xff;
-    });
-    XorShiftRng::from_seed(seed_array)
-}
-
 fn main() {
     use simon::*;
-    let (seed, output_path, animate): (u128, Option<String>, bool) = args_all! {
+    let (seed, output_path, animate): (u64, Option<String>, bool) = args_all! {
         opt("s", "seed", "rng seed", "INT")
             .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen())),
         opt("o", "output", "output path", "PATH"),
@@ -34,7 +26,7 @@ fn main() {
     .with_help_default()
     .parse_env_default_or_exit();
     println!("seed: {}", seed);
-    let mut rng = rng_from_integer_seed(seed);
+    let mut rng = XorShiftRng::seed_from_u64(seed);
     let image = image::load_from_memory(include_bytes!("flowers.png")).unwrap();
     let pattern_size = Size::new(3, 3);
     let mut image_patterns = ImagePatterns::new(&image, pattern_size);

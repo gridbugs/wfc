@@ -15,18 +15,10 @@ use wfc::wrap::*;
 use wfc::*;
 use wfc_image::{ImagePatterns, Size};
 
-fn rng_from_integer_seed(seed: u128) -> XorShiftRng {
-    let mut seed_array = [0; 16];
-    seed_array.iter_mut().enumerate().for_each(|(i, part)| {
-        *part = (seed >> (i * 8)) as u8 & 0xff;
-    });
-    XorShiftRng::from_seed(seed_array)
-}
-
 fn main() {
     use simon::*;
     let (seed, input_path, forever, anchor_top, anchor_bottom, width, height): (
-        u128,
+        u64,
         String,
         bool,
         bool,
@@ -68,7 +60,7 @@ fn main() {
     } else {
         None
     };
-    let mut rng = rng_from_integer_seed(seed);
+    let mut rng = XorShiftRng::seed_from_u64(seed);
     let window_spec = WindowSpec {
         title: "animate".to_string(),
         grid_size: output_size,
