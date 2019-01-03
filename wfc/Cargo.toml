@@ -1,7 +1,7 @@
 [package]
 name = "wfc"
 description = "Generate images using Wave Function Collapse"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Stephen Sherratt <stephen@sherra.tt>"]
 license = "MIT"
 readme = "README.md"
@@ -14,5 +14,5 @@ documentation = "https://docs.rs/wfc"
 rand = "0.6"
 hashbrown = "0.1"
 coord_2d = "0.2"
-grid_2d = "0.11"
+grid_2d = "0.12"
 direction = "0.17"
