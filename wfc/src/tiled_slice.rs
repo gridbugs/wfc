@@ -1,6 +1,7 @@
 use coord_2d::*;
 use grid_2d::coord_system::{CoordSystem, XThenY, XThenYIter};
 use grid_2d::*;
+use orientation::Orientation;
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone)]
@@ -8,12 +9,12 @@ pub struct TiledGridSlice<'a, T: 'a, S: 'a + CoordSystem + Clone = XThenY> {
     grid: &'a Grid<T, S>,
     offset: Coord,
     size: Size,
+    orientation: Orientation,
 }
 
-pub struct TiledGridSliceIter<'a, T: 'a, S: 'a + CoordSystem> {
-    grid: &'a Grid<T, S>,
+pub struct TiledGridSliceIter<'a, T: 'a, S: 'a + CoordSystem + Clone> {
+    grid: &'a TiledGridSlice<'a, T, S>,
     coord_iter: XThenYIter,
-    offset: Coord,
 }
 
 impl<'a, T, S> Iterator for TiledGridSliceIter<'a, T, S>
@@ -24,7 +25,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.coord_iter
             .next()
-            .map(|coord| self.grid.get_tiled(self.offset + coord))
+            .map(|coord| self.grid.get_valid(coord))
     }
 }
 
@@ -32,28 +33,39 @@ impl<'a, T, S> TiledGridSlice<'a, T, S>
 where
     S: CoordSystem + Clone,
 {
-    pub fn new(grid: &'a Grid<T, S>, offset: Coord, size: Size) -> Self {
+    pub fn new(
+        grid: &'a Grid<T, S>,
+        offset: Coord,
+        size: Size,
+        orientation: Orientation,
+    ) -> Self {
         TiledGridSlice {
             grid,
             offset,
             size,
+            orientation,
         }
     }
-    fn _get(&self, coord: Coord) -> Option<&T> {
+    pub fn size(&self) -> Size {
+        self.size
+    }
+    fn get_valid(&self, coord: Coord) -> &'a T {
+        let transformed_coord = self.orientation.transform_coord(self.size, coord);
+        self.grid.get_tiled(self.offset + transformed_coord)
+    }
+    pub fn get_checked(&self, coord: Coord) -> &'a T {
         if coord.is_valid(self.size) {
-            Some(self.grid.get_tiled(self.offset + coord))
+            self.get_valid(coord)
         } else {
-            None
+            panic!("coord is out of bounds");
         }
     }
-
     pub fn offset(&self) -> Coord {
         self.offset
     }
     pub fn iter(&self) -> TiledGridSliceIter<T, S> {
         TiledGridSliceIter {
-            grid: self.grid,
-            offset: self.offset,
+            grid: self,
             coord_iter: XThenYIter::from(self.size),
         }
     }
@@ -78,11 +90,7 @@ where
         self.size == other.size && self.iter().zip(other.iter()).all(|(s, o)| s.eq(o))
     }
 }
-impl<'a, T: Eq, S> Eq for TiledGridSlice<'a, T, S>
-where
-    S: CoordSystem + Clone,
-{
-}
+impl<'a, T: Eq, S> Eq for TiledGridSlice<'a, T, S> where S: CoordSystem + Clone {}
 
 #[cfg(test)]
 mod test {
@@ -93,7 +101,7 @@ mod test {
     fn tiling() {
         let grid = Grid::new_fn(Size::new(4, 4), |coord| coord);
         let slice = TiledGridSlice::new(&grid, Coord::new(-1, -1), Size::new(2, 2));
-        let value = *slice._get(Coord::new(0, 1)).unwrap();
+        let value = *slice.get_valid(Coord::new(0, 1));
         assert_eq!(value, Coord::new(3, 0));
     }
     #[test]

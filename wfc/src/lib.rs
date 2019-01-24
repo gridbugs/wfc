@@ -4,6 +4,7 @@ extern crate grid_2d;
 extern crate hashbrown;
 extern crate rand;
 
+mod orientation;
 pub mod overlapping;
 pub mod retry;
 mod tiled_slice;
