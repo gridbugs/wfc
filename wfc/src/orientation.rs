@@ -37,9 +37,20 @@ pub enum Orientation {
     DiagonallyFlippedClockwise270,
 }
 
+use self::Orientation::*;
+pub const ALL: [Orientation; 8] = [
+    Original,
+    Clockwise90,
+    Clockwise180,
+    Clockwise270,
+    DiagonallyFlipped,
+    DiagonallyFlippedClockwise90,
+    DiagonallyFlippedClockwise180,
+    DiagonallyFlippedClockwise270,
+];
+
 impl Orientation {
     pub fn transform_coord(self, size: Size, coord: Coord) -> Coord {
-        use self::Orientation::*;
         match self {
             Original => coord,
             Clockwise90 => Coord::new(coord.y, size.x() as i32 - 1 - coord.x),

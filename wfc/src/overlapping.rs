@@ -3,7 +3,7 @@ use direction::{CardinalDirection, CardinalDirectionTable, CardinalDirections};
 use grid_2d::coord_system::XThenYIter;
 use grid_2d::Grid;
 use hashbrown::HashMap;
-use orientation::Orientation;
+use orientation::{self, Orientation};
 use std::hash::Hash;
 use std::num::NonZeroU32;
 use tiled_slice::TiledGridSlice;
@@ -66,45 +66,21 @@ pub struct OverlappingPatterns<T: Eq + Clone + Hash> {
     grid: Grid<T>,
 }
 
-struct PatternIter<'a, T> {
-    grid: &'a Grid<T>,
-    pattern_size: Size,
-    coord_iter: XThenYIter,
-}
-impl<'a, T> Iterator for PatternIter<'a, T> {
-    type Item = TiledGridSlice<'a, T>;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.coord_iter.next().map(|coord| {
-            TiledGridSlice::new(
-                self.grid,
-                coord,
-                self.pattern_size,
-                Orientation::Clockwise90,
-            )
-        })
-    }
-}
-impl<'a, T> PatternIter<'a, T> {
-    fn new(grid: &'a Grid<T>, pattern_size: Size) -> Self {
-        Self {
-            grid,
-            pattern_size,
-            coord_iter: XThenYIter::from(grid.size()),
-        }
-    }
-}
-
 impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
     pub fn new(grid: Grid<T>, pattern_size: Size) -> Self {
         let pattern_table = {
             let mut pattern_map = HashMap::new();
-            PatternIter::new(&grid, pattern_size).for_each(|pattern_slice| {
-                let pattern = pattern_map
-                    .entry(pattern_slice.clone())
-                    .or_insert_with(|| Pattern::new(Orientation::Clockwise90));
-                pattern.coords.push(pattern_slice.offset());
-                pattern.count += 1;
-            });
+            for &orientation in orientation::ALL.iter() {
+                for coord in XThenYIter::new(grid.size()) {
+                    let pattern_slice =
+                        TiledGridSlice::new(&grid, coord, pattern_size, orientation);
+                    let pattern = pattern_map
+                        .entry(pattern_slice.clone())
+                        .or_insert_with(|| Pattern::new(orientation));
+                    pattern.coords.push(pattern_slice.offset());
+                    pattern.count += 1;
+                }
+            }
             let mut patterns = pattern_map
                 .drain()
                 .map(|(_, pattern)| pattern)
