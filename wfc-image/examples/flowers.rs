@@ -29,7 +29,8 @@ fn main() {
     let mut rng = XorShiftRng::seed_from_u64(seed);
     let image = image::load_from_memory(include_bytes!("flowers.png")).unwrap();
     let pattern_size = Size::new(3, 3);
-    let mut image_patterns = ImagePatterns::new(&image, pattern_size);
+    let mut image_patterns =
+        ImagePatterns::new(&image, pattern_size, &[Orientation::Original]);
     let output_size = Size::new(48, 48);
     let window_spec = WindowSpec {
         title: "flowers".to_string(),
@@ -42,7 +43,7 @@ fn main() {
         None
     };
     let start_time = ::std::time::Instant::now();
-    let id_grid = image_patterns.id_grid();
+    let id_grid = image_patterns.id_grid_original_orientation();
     let bottom_left_corner_coord =
         Coord::new(0, image_patterns.grid().size().y() as i32 - 1);
     let bottom_left_corner_id = *id_grid.get_checked(bottom_left_corner_coord);

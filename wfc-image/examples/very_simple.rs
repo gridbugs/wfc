@@ -18,6 +18,7 @@ fn main() {
         &input_image,
         pattern_size,
         output_size,
+        &[Orientation::Original],
         wrap::WrapXY,
         retry::Forever,
     );

@@ -116,20 +116,18 @@ impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
     }
     pub fn id_grid(&self) -> Grid<OrientationTable<PatternId>> {
         let empty: OrientationTable<PatternId> = OrientationTable::new();
-        let mut maybe_id_grid = Grid::new_clone(self.grid.size(), empty);
+        let mut id_grid = Grid::new_clone(self.grid.size(), empty);
         self.pattern_table
             .iter()
             .enumerate()
             .for_each(|(pattern_id_usize, pattern)| {
                 pattern.coords.iter().for_each(|&coord| {
-                    maybe_id_grid
+                    id_grid
                         .get_checked_mut(coord)
                         .insert(pattern.orientation, pattern_id_usize as PatternId);
                 });
             });
-        Grid::new_fn(self.grid.size(), |coord| {
-            maybe_id_grid.get_checked(coord).clone()
-        })
+        id_grid
     }
     pub fn id_grid_original_orientation(&self) -> Grid<PatternId> {
         let id_grid = self.id_grid();

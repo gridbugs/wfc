@@ -9,15 +9,22 @@ use wfc_image::*;
 
 fn main() {
     use simon::*;
-    let (seed, input_path, output_path): (u64, String, String) = args_all! {
-        opt("s", "seed", "rng seed", "INT")
-            .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen())),
-        opt_required("i", "input", "input path", "PATH"),
-        opt_required("o", "output", "output path", "PATH"),
-    }
-    .with_help_default()
-    .parse_env_default_or_exit();
+    let (seed, input_path, output_path, all_orientations): (u64, String, String, bool) =
+        args_all! {
+            opt("s", "seed", "rng seed", "INT")
+                .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen())),
+            opt_required("i", "input", "input path", "PATH"),
+            opt_required("o", "output", "output path", "PATH"),
+            flag("a", "all-orientations", "all orientations"),
+        }
+        .with_help_default()
+        .parse_env_default_or_exit();
     println!("seed: {}", seed);
+    let orientation: &[Orientation] = if all_orientations {
+        &orientation::ALL
+    } else {
+        &[Orientation::Original]
+    };
     let input_image = image::open(input_path).unwrap();
     let pattern_size = PatternSize(Size::new(3, 3));
     let output_size = OutputSize(Size::new(48, 48));
@@ -27,6 +34,7 @@ fn main() {
         &input_image,
         pattern_size,
         output_size,
+        orientation,
         wrap::WrapXY,
         retry::Forever,
         &mut rng,

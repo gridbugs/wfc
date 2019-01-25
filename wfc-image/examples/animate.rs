@@ -41,9 +41,10 @@ fn main() {
     let image = image::open(input_path).unwrap();
     let pattern_size = Size::new(3, 3);
     let output_size = Size::new(width, height);
-    let mut image_patterns = ImagePatterns::new(&image, pattern_size);
+    let mut image_patterns =
+        ImagePatterns::new(&image, pattern_size, &[Orientation::Original]);
     let input_size = image_patterns.grid().size();
-    let id_grid = image_patterns.id_grid();
+    let id_grid = image_patterns.id_grid_original_orientation();
     let bottom_left_corner_id = if anchor_bottom {
         let coord = Coord::new(0, input_size.y() as i32 - 1);
         let pattern_id = *id_grid.get_checked(coord);
