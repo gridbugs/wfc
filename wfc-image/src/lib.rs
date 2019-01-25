@@ -9,6 +9,7 @@ pub use coord_2d::Size;
 use grid_2d::Grid;
 use image::{DynamicImage, Rgb, RgbImage};
 use rand::Rng;
+use wfc::orientation::{Orientation, OrientationTable};
 use wfc::overlapping::{OverlappingPatterns, Pattern};
 use wfc::retry as wfc_retry;
 pub use wfc::wrap;
@@ -36,13 +37,18 @@ pub struct ImagePatterns {
 }
 
 impl ImagePatterns {
-    pub fn new(image: &DynamicImage, pattern_size: Size) -> Self {
+    pub fn new(
+        image: &DynamicImage,
+        pattern_size: Size,
+        orientations: &[Orientation],
+    ) -> Self {
         let rgb_image = image.to_rgb();
         let size = Size::new(rgb_image.width(), rgb_image.height());
         let grid = Grid::new_fn(size, |Coord { x, y }| {
             *rgb_image.get_pixel(x as u32, y as u32)
         });
-        let overlapping_patterns = OverlappingPatterns::new(grid, pattern_size);
+        let overlapping_patterns =
+            OverlappingPatterns::new(grid, pattern_size, orientations);
         Self {
             overlapping_patterns,
             empty_colour: Rgb { data: [0, 0, 0] },
@@ -103,8 +109,12 @@ impl ImagePatterns {
         self.overlapping_patterns.grid()
     }
 
-    pub fn id_grid(&self) -> Grid<PatternId> {
+    pub fn id_grid(&self) -> Grid<OrientationTable<PatternId>> {
         self.overlapping_patterns.id_grid()
+    }
+
+    pub fn id_grid_original_orientation(&self) -> Grid<PatternId> {
+        self.overlapping_patterns.id_grid_original_orientation()
     }
 
     pub fn pattern(&self, pattern_id: PatternId) -> &Pattern {
@@ -154,6 +164,7 @@ pub fn generate_image_with_rng<W, IR, R>(
     image: &DynamicImage,
     pattern_size: PatternSize,
     output_size: OutputSize,
+    orientations: &[Orientation],
     wrap: W,
     retry: IR,
     rng: &mut R,
@@ -163,7 +174,7 @@ where
     IR: retry::ImageRetry,
     R: Rng,
 {
-    let image_patterns = ImagePatterns::new(image, pattern_size.0);
+    let image_patterns = ImagePatterns::new(image, pattern_size.0, orientations);
     IR::image_return(
         image_patterns.collapse_wave_retrying(output_size.0, wrap, retry, rng),
         &image_patterns,
@@ -174,6 +185,7 @@ pub fn generate_image<W, IR>(
     image: &DynamicImage,
     pattern_size: PatternSize,
     output_size: OutputSize,
+    orientations: &[Orientation],
     wrap: W,
     retry: IR,
 ) -> IR::ImageReturn
@@ -185,6 +197,7 @@ where
         image,
         pattern_size,
         output_size,
+        orientations,
         wrap,
         retry,
         &mut rand::thread_rng(),

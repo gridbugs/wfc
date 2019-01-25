@@ -37,8 +37,10 @@ pub enum Orientation {
     DiagonallyFlippedClockwise270,
 }
 
+pub const NUM_ORIENTATIONS: usize = 8;
+
 use self::Orientation::*;
-pub const ALL: [Orientation; 8] = [
+pub const ALL: [Orientation; NUM_ORIENTATIONS] = [
     Original,
     Clockwise90,
     Clockwise180,
@@ -50,7 +52,7 @@ pub const ALL: [Orientation; 8] = [
 ];
 
 impl Orientation {
-    pub fn transform_coord(self, size: Size, coord: Coord) -> Coord {
+    pub(crate) fn transform_coord(self, size: Size, coord: Coord) -> Coord {
         match self {
             Original => coord,
             Clockwise90 => Coord::new(coord.y, size.x() as i32 - 1 - coord.x),
@@ -69,6 +71,28 @@ impl Orientation {
                 Coord::new(coord.x, size.y() as i32 - 1 - coord.y)
             }
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OrientationTable<T> {
+    table: [Option<T>; NUM_ORIENTATIONS],
+}
+
+impl<T> OrientationTable<T> {
+    pub fn new() -> Self {
+        Self {
+            table: [None, None, None, None, None, None, None, None],
+        }
+    }
+    pub fn get(&self, orientation: Orientation) -> Option<&T> {
+        self.table[orientation as usize].as_ref()
+    }
+    pub fn get_mut(&mut self, orientation: Orientation) -> Option<&mut T> {
+        self.table[orientation as usize].as_mut()
+    }
+    pub fn insert(&mut self, orientation: Orientation, value: T) {
+        self.table[orientation as usize] = Some(value);
     }
 }
 

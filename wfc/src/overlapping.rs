@@ -3,7 +3,7 @@ use direction::{CardinalDirection, CardinalDirectionTable, CardinalDirections};
 use grid_2d::coord_system::XThenYIter;
 use grid_2d::Grid;
 use hashbrown::HashMap;
-use orientation::{self, Orientation};
+use orientation::{self, Orientation, OrientationTable};
 use std::hash::Hash;
 use std::num::NonZeroU32;
 use tiled_slice::TiledGridSlice;
@@ -67,10 +67,10 @@ pub struct OverlappingPatterns<T: Eq + Clone + Hash> {
 }
 
 impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
-    pub fn new(grid: Grid<T>, pattern_size: Size) -> Self {
+    pub fn new(grid: Grid<T>, pattern_size: Size, orientations: &[Orientation]) -> Self {
         let pattern_table = {
             let mut pattern_map = HashMap::new();
-            for &orientation in orientation::ALL.iter() {
+            for &orientation in orientations.iter() {
                 for coord in XThenYIter::new(grid.size()) {
                     let pattern_slice =
                         TiledGridSlice::new(&grid, coord, pattern_size, orientation);
@@ -94,6 +94,12 @@ impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
             grid,
         }
     }
+    pub fn new_all_orientations(grid: Grid<T>, pattern_size: Size) -> Self {
+        Self::new(grid, pattern_size, &orientation::ALL)
+    }
+    pub fn new_original_orientation(grid: Grid<T>, pattern_size: Size) -> Self {
+        Self::new(grid, pattern_size, &[Orientation::Original])
+    }
     pub fn grid(&self) -> &Grid<T> {
         &self.grid
     }
@@ -108,18 +114,31 @@ impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
         let tiled_grid_slice = pattern.tiled_grid_slice(&self.grid, self.pattern_size);
         tiled_grid_slice.get_checked(Coord::new(0, 0))
     }
-    pub fn id_grid(&self) -> Grid<PatternId> {
-        let mut maybe_id_grid = Grid::new_clone(self.grid.size(), None);
+    pub fn id_grid(&self) -> Grid<OrientationTable<PatternId>> {
+        let empty: OrientationTable<PatternId> = OrientationTable::new();
+        let mut maybe_id_grid = Grid::new_clone(self.grid.size(), empty);
         self.pattern_table
             .iter()
             .enumerate()
-            .for_each(|(pattern_id, pattern)| {
+            .for_each(|(pattern_id_usize, pattern)| {
                 pattern.coords.iter().for_each(|&coord| {
-                    *maybe_id_grid.get_checked_mut(coord) = Some(pattern_id as PatternId);
+                    maybe_id_grid
+                        .get_checked_mut(coord)
+                        .insert(pattern.orientation, pattern_id_usize as PatternId);
                 });
             });
         Grid::new_fn(self.grid.size(), |coord| {
-            maybe_id_grid.get_checked(coord).unwrap().clone()
+            maybe_id_grid.get_checked(coord).clone()
+        })
+    }
+    pub fn id_grid_original_orientation(&self) -> Grid<PatternId> {
+        let id_grid = self.id_grid();
+        Grid::new_fn(id_grid.size(), |coord| {
+            id_grid
+                .get_checked(coord)
+                .get(Orientation::Original)
+                .expect("Missing original orientation")
+                .clone()
         })
     }
     fn compatible_patterns<'b>(
