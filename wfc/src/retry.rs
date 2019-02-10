@@ -42,7 +42,7 @@ impl RetryOwn for NumTimes {
     {
         loop {
             match run.collapse(rng) {
-                Ok(()) => (),
+                Ok(()) => return Ok(run.into_wave()),
                 Err(e) => {
                     if self.0 == 0 {
                         return Err(e);
@@ -51,7 +51,6 @@ impl RetryOwn for NumTimes {
                     }
                 }
             }
-            return Ok(run.into_wave());
         }
     }
 }

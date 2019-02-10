@@ -7,7 +7,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use wfc_image::*;
 
-fn main() {
+fn app() -> Result<(), ()> {
     use simon::*;
     let (seed, input_path, output_path, all_orientations): (u64, String, String, bool) =
         args_all! {
@@ -39,11 +39,22 @@ fn main() {
         retry::NumTimes(1),
         &mut rng,
     ) {
-        Err(_) => panic!("Too many contradictions"),
+        Err(_) => {
+            eprintln!("Too many contradictions");
+            Err(())
+        }
         Ok(output_image) => {
             let end_time = ::std::time::Instant::now();
             println!("{:?}", end_time - start_time);
             output_image.save(output_path).unwrap();
+            Ok(())
         }
     }
+}
+
+fn main() {
+    ::std::process::exit(match app() {
+        Ok(()) => 0,
+        Err(()) => 1,
+    })
 }
