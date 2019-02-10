@@ -11,32 +11,28 @@ use coord_2d::Coord;
 use pixel_grid::{Window, WindowSpec};
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
+use std::thread;
+use std::time::Duration;
 use wfc::wrap::*;
 use wfc::*;
 use wfc_image::{ImagePatterns, Size};
 
 fn main() {
     use simon::*;
-    let (seed, input_path, forever, anchor_top, anchor_bottom, width, height): (
-        u64,
-        String,
-        bool,
-        bool,
-        bool,
-        u32,
-        u32,
-    ) = args_all! {
-        opt("s", "seed", "rng seed", "INT")
-            .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen())),
-        opt_required("i", "input", "input path", "PATH"),
-        flag("f", "forever", "repeat forever"),
-        flag("t", "anchor-top", "anchor top"),
-        flag("b", "anchor-bottom", "anchor bottom"),
-        opt_default("x", "width", "width", "INT", 48),
-        opt_default("y", "height", "height", "INT", 48),
-    }
-    .with_help_default()
-    .parse_env_default_or_exit();
+    let (seed, input_path, forever, anchor_top, anchor_bottom, width, height, delay) =
+        args_all! {
+            opt("s", "seed", "rng seed", "INT")
+                .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen())),
+            opt_required::<String>("i", "input", "input path", "PATH"),
+            flag("f", "forever", "repeat forever"),
+            flag("t", "anchor-top", "anchor top"),
+            flag("b", "anchor-bottom", "anchor bottom"),
+            opt_default::<u32>("x", "width", "width", "INT", 48),
+            opt_default::<u32>("y", "height", "height", "INT", 48),
+            opt::<u64>("d", "delay", "delay between steps", "MS"),
+        }
+        .with_help_default()
+        .parse_env_default_or_exit();
     println!("seed: {}", seed);
     let image = image::open(input_path).unwrap();
     let pattern_size = 3;
@@ -71,6 +67,7 @@ fn main() {
     let global_stats = image_patterns.global_stats();
     let mut wave = Wave::new(output_size);
     let mut context = Context::new();
+    let delay = delay.map(Duration::from_millis);
     'generate: loop {
         let mut run =
             RunBorrow::new(&mut context, &mut wave, &global_stats, WrapXY, &mut rng);
@@ -99,6 +96,9 @@ fn main() {
                     });
             });
             window.draw();
+            if let Some(delay) = delay {
+                thread::sleep(delay);
+            }
             if window.is_closed() {
                 return;
             }
