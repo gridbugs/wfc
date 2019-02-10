@@ -36,9 +36,10 @@ fn main() {
         output_size,
         orientation,
         wrap::WrapXY,
-        retry::Forever,
+        retry::NumTimes(1),
         &mut rng,
-    );
+    )
+    .expect("Too many contradictions");
     let end_time = ::std::time::Instant::now();
     println!("{:?}", end_time - start_time);
     output_image.save(output_path).unwrap();

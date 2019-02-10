@@ -92,32 +92,29 @@ fn main() {
             }
         }
         'inner: loop {
-            match run.step(&mut rng) {
-                Ok(observe) => {
-                    window.with_pixel_grid(|mut pixel_grid| {
-                        run.wave_cell_ref_iter()
-                            .zip(pixel_grid.iter_mut())
-                            .for_each(|(cell, mut pixel)| {
-                                let colour =
-                                    image_patterns.weighted_average_colour(&cell);
-                                pixel.set_colour_array_u8(colour.data);
-                            });
+            window.with_pixel_grid(|mut pixel_grid| {
+                run.wave_cell_ref_iter()
+                    .zip(pixel_grid.iter_mut())
+                    .for_each(|(cell, mut pixel)| {
+                        let colour = image_patterns.weighted_average_colour(&cell);
+                        pixel.set_colour_array_u8(colour.data);
                     });
-                    window.draw();
-                    if window.is_closed() {
-                        return;
-                    }
-                    match observe {
-                        Observe::Complete => {
-                            if forever {
-                                continue 'generate;
-                            } else {
-                                break 'generate;
-                            }
+            });
+            window.draw();
+            if window.is_closed() {
+                return;
+            }
+            match run.step(&mut rng) {
+                Ok(observe) => match observe {
+                    Observe::Complete => {
+                        if forever {
+                            continue 'generate;
+                        } else {
+                            break 'generate;
                         }
-                        Observe::Incomplete => (),
                     }
-                }
+                    Observe::Incomplete => (),
+                },
                 Err(PropagateError::Contradiction) => break 'inner,
             }
         }
