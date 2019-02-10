@@ -31,7 +31,7 @@ impl RetryOwn for Forever {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct NumTimes(usize);
+pub struct NumTimes(pub usize);
 
 impl RetryOwn for NumTimes {
     type Return = Result<Wave, PropagateError>;
