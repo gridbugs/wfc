@@ -96,11 +96,18 @@ impl<'a, T: Eq, S> Eq for TiledGridSlice<'a, T, S> where S: CoordSystem + Clone 
 mod test {
     use super::*;
     use coord_2d::{Coord, Size};
+    use orientation::Orientation;
     use std::collections::HashSet;
+
     #[test]
     fn tiling() {
         let grid = Grid::new_fn(Size::new(4, 4), |coord| coord);
-        let slice = TiledGridSlice::new(&grid, Coord::new(-1, -1), Size::new(2, 2));
+        let slice = TiledGridSlice::new(
+            &grid,
+            Coord::new(-1, -1),
+            Size::new(2, 2),
+            Orientation::Original,
+        );
         let value = *slice.get_valid(Coord::new(0, 1));
         assert_eq!(value, Coord::new(3, 0));
     }
@@ -109,9 +116,9 @@ mod test {
         let mut grid = Grid::new_fn(Size::new(4, 4), |_| 0);
         *grid.get_mut(Coord::new(3, 3)).unwrap() = 1;
         let size = Size::new(2, 2);
-        let a = TiledGridSlice::new(&grid, Coord::new(0, 0), size);
-        let b = TiledGridSlice::new(&grid, Coord::new(2, 2), size);
-        let c = TiledGridSlice::new(&grid, Coord::new(0, 2), size);
+        let a = TiledGridSlice::new(&grid, Coord::new(0, 0), size, Orientation::Original);
+        let b = TiledGridSlice::new(&grid, Coord::new(2, 2), size, Orientation::Original);
+        let c = TiledGridSlice::new(&grid, Coord::new(0, 2), size, Orientation::Original);
         let mut set = HashSet::new();
         set.insert(a);
         set.insert(b);

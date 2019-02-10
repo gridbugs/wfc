@@ -109,7 +109,7 @@ mod test {
         );
         assert_eq!(
             Orientation::Clockwise90.transform_coord(size, Coord::new(0, 0)),
-            Coord::new(0, 1)
+            Coord::new(0, 2)
         );
     }
 }

@@ -184,6 +184,14 @@ mod test {
     use coord_2d::{Coord, Size};
     use direction::CardinalDirection;
     use grid_2d::Grid;
+    use orientation::Orientation;
+
+    fn pattern_with_coord(coord: Coord) -> Pattern {
+        let mut pattern = Pattern::new(Orientation::Original);
+        pattern.coords.push(coord);
+        pattern
+    }
+
     #[test]
     fn compatibile_patterns() {
         let r = 0;
@@ -194,32 +202,24 @@ mod test {
         });
         let pattern_size = Size::new(2, 2);
         assert!(are_patterns_compatible(
-            Coord::new(0, 0),
-            Coord::new(1, 0),
+            &pattern_with_coord(Coord::new(0, 0)).tiled_grid_slice(&grid, pattern_size),
+            &pattern_with_coord(Coord::new(1, 0)).tiled_grid_slice(&grid, pattern_size),
             CardinalDirection::East,
-            pattern_size,
-            &grid,
         ));
         assert!(are_patterns_compatible(
-            Coord::new(0, 0),
-            Coord::new(1, 0),
+            &pattern_with_coord(Coord::new(0, 0)).tiled_grid_slice(&grid, pattern_size),
+            &pattern_with_coord(Coord::new(1, 0)).tiled_grid_slice(&grid, pattern_size),
             CardinalDirection::North,
-            pattern_size,
-            &grid,
         ));
         assert!(!are_patterns_compatible(
-            Coord::new(0, 0),
-            Coord::new(1, 0),
+            &pattern_with_coord(Coord::new(0, 0)).tiled_grid_slice(&grid, pattern_size),
+            &pattern_with_coord(Coord::new(1, 0)).tiled_grid_slice(&grid, pattern_size),
             CardinalDirection::South,
-            pattern_size,
-            &grid,
         ));
         assert!(!are_patterns_compatible(
-            Coord::new(0, 0),
-            Coord::new(1, 0),
+            &pattern_with_coord(Coord::new(0, 0)).tiled_grid_slice(&grid, pattern_size),
+            &pattern_with_coord(Coord::new(1, 0)).tiled_grid_slice(&grid, pattern_size),
             CardinalDirection::West,
-            pattern_size,
-            &grid,
         ));
     }
 }
