@@ -4,3 +4,6 @@ members = [
     "wfc",
     "wfc-image",
 ]
+
+[profile.release]
+lto = true
