@@ -16,6 +16,10 @@ fn are_patterns_compatible<T: PartialEq>(
 ) -> bool {
     let size = a.size();
     assert!(size == b.size());
+    if size.x() == 1 {
+        // patterns don't overlap, so everything is compatible
+        return true;
+    }
     let axis = b_offset_direction.axis();
     let compare_size = size.with_axis(axis, |d| d - 1);
     let (a_offset, b_offset) = match b_offset_direction {
@@ -67,8 +71,12 @@ pub struct OverlappingPatterns<T: Eq + Clone + Hash> {
 }
 
 impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
-    pub fn new(grid: Grid<T>, pattern_size: u32, orientations: &[Orientation]) -> Self {
-        let pattern_size = Size::new(pattern_size, pattern_size);
+    pub fn new(
+        grid: Grid<T>,
+        pattern_size: NonZeroU32,
+        orientations: &[Orientation],
+    ) -> Self {
+        let pattern_size = Size::new(pattern_size.get(), pattern_size.get());
         let pattern_table = {
             let mut pattern_map = HashMap::new();
             for &orientation in orientations.iter() {
@@ -95,10 +103,10 @@ impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
             grid,
         }
     }
-    pub fn new_all_orientations(grid: Grid<T>, pattern_size: u32) -> Self {
+    pub fn new_all_orientations(grid: Grid<T>, pattern_size: NonZeroU32) -> Self {
         Self::new(grid, pattern_size, &orientation::ALL)
     }
-    pub fn new_original_orientation(grid: Grid<T>, pattern_size: u32) -> Self {
+    pub fn new_original_orientation(grid: Grid<T>, pattern_size: NonZeroU32) -> Self {
         Self::new(grid, pattern_size, &[Orientation::Original])
     }
     pub fn grid(&self) -> &Grid<T> {

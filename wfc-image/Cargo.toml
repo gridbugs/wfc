@@ -1,7 +1,7 @@
 [package]
 name = "wfc_image"
 description = "Create patterns for wfc using image files"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Stephen Sherratt <stephen@sherra.tt>"]
 license = "MIT"
 readme = "README.md"
@@ -11,7 +11,7 @@ documentation = "https://docs.rs/wfc_image"
 
 
 [dependencies]
-wfc = { path = "../wfc", version = "0.6" }
+wfc = { path = "../wfc", version = "0.7" }
 image = "0.20"
 coord_2d = "0.2"
 grid_2d = "0.12"

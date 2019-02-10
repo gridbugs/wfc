@@ -1,6 +1,7 @@
 extern crate image;
 extern crate wfc_image;
 
+use std::num::NonZeroU32;
 use wfc_image::*;
 
 fn main() {
@@ -13,7 +14,7 @@ fn main() {
     let output_path = &args[2];
     let input_image = image::open(input_path).unwrap();
     let output_size = Size::new(48, 48);
-    let pattern_size = 3;
+    let pattern_size = NonZeroU32::new(3).unwrap();
     let output_image = wfc_image::generate_image(
         &input_image,
         pattern_size,

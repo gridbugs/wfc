@@ -9,6 +9,7 @@ pub use coord_2d::Size;
 use grid_2d::Grid;
 use image::{DynamicImage, Rgb, RgbImage};
 use rand::Rng;
+use std::num::NonZeroU32;
 use wfc::orientation::OrientationTable;
 pub use wfc::orientation::{self, Orientation};
 use wfc::overlapping::{OverlappingPatterns, Pattern};
@@ -40,7 +41,7 @@ pub struct ImagePatterns {
 impl ImagePatterns {
     pub fn new(
         image: &DynamicImage,
-        pattern_size: u32,
+        pattern_size: NonZeroU32,
         orientations: &[Orientation],
     ) -> Self {
         let rgb_image = image.to_rgb();
@@ -173,7 +174,7 @@ impl retry::ImageRetry for retry::NumTimes {
 
 pub fn generate_image_with_rng<W, IR, R>(
     image: &DynamicImage,
-    pattern_size: u32,
+    pattern_size: NonZeroU32,
     output_size: Size,
     orientations: &[Orientation],
     wrap: W,
@@ -194,7 +195,7 @@ where
 
 pub fn generate_image<W, IR>(
     image: &DynamicImage,
-    pattern_size: u32,
+    pattern_size: NonZeroU32,
     output_size: Size,
     orientations: &[Orientation],
     wrap: W,

@@ -11,6 +11,7 @@ use coord_2d::{Coord, Size};
 use pixel_grid::{Window, WindowSpec};
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
+use std::num::NonZeroU32;
 use wfc::wrap::*;
 use wfc::*;
 use wfc_image::ImagePatterns;
@@ -28,7 +29,7 @@ fn main() {
     println!("seed: {}", seed);
     let mut rng = XorShiftRng::seed_from_u64(seed);
     let image = image::load_from_memory(include_bytes!("flowers.png")).unwrap();
-    let pattern_size = 3;
+    let pattern_size = NonZeroU32::new(3).unwrap();
     let mut image_patterns =
         ImagePatterns::new(&image, pattern_size, &[Orientation::Original]);
     let output_size = Size::new(48, 48);
