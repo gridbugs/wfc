@@ -40,7 +40,7 @@ pub struct ImagePatterns {
 impl ImagePatterns {
     pub fn new(
         image: &DynamicImage,
-        pattern_size: Size,
+        pattern_size: u32,
         orientations: &[Orientation],
     ) -> Self {
         let rgb_image = image.to_rgb();
@@ -148,9 +148,6 @@ impl ImagePatterns {
     }
 }
 
-pub struct PatternSize(pub Size);
-pub struct OutputSize(pub Size);
-
 impl retry::ImageRetry for retry::Forever {
     type ImageReturn = DynamicImage;
     fn image_return(
@@ -176,8 +173,8 @@ impl retry::ImageRetry for retry::NumTimes {
 
 pub fn generate_image_with_rng<W, IR, R>(
     image: &DynamicImage,
-    pattern_size: PatternSize,
-    output_size: OutputSize,
+    pattern_size: u32,
+    output_size: Size,
     orientations: &[Orientation],
     wrap: W,
     retry: IR,
@@ -188,17 +185,17 @@ where
     IR: retry::ImageRetry,
     R: Rng,
 {
-    let image_patterns = ImagePatterns::new(image, pattern_size.0, orientations);
+    let image_patterns = ImagePatterns::new(image, pattern_size, orientations);
     IR::image_return(
-        image_patterns.collapse_wave_retrying(output_size.0, wrap, retry, rng),
+        image_patterns.collapse_wave_retrying(output_size, wrap, retry, rng),
         &image_patterns,
     )
 }
 
 pub fn generate_image<W, IR>(
     image: &DynamicImage,
-    pattern_size: PatternSize,
-    output_size: OutputSize,
+    pattern_size: u32,
+    output_size: Size,
     orientations: &[Orientation],
     wrap: W,
     retry: IR,

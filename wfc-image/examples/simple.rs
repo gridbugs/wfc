@@ -26,8 +26,8 @@ fn app() -> Result<(), ()> {
         &[Orientation::Original]
     };
     let input_image = image::open(input_path).unwrap();
-    let pattern_size = PatternSize(Size::new(3, 3));
-    let output_size = OutputSize(Size::new(48, 48));
+    let pattern_size = 3;
+    let output_size = Size::new(48, 48);
     let mut rng = StdRng::seed_from_u64(seed);
     let start_time = ::std::time::Instant::now();
     match generate_image_with_rng(
@@ -36,7 +36,7 @@ fn app() -> Result<(), ()> {
         output_size,
         orientation,
         wrap::WrapXY,
-        retry::NumTimes(1),
+        retry::NumTimes(10),
         &mut rng,
     ) {
         Err(_) => {

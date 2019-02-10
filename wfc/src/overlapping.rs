@@ -67,7 +67,8 @@ pub struct OverlappingPatterns<T: Eq + Clone + Hash> {
 }
 
 impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
-    pub fn new(grid: Grid<T>, pattern_size: Size, orientations: &[Orientation]) -> Self {
+    pub fn new(grid: Grid<T>, pattern_size: u32, orientations: &[Orientation]) -> Self {
+        let pattern_size = Size::new(pattern_size, pattern_size);
         let pattern_table = {
             let mut pattern_map = HashMap::new();
             for &orientation in orientations.iter() {
@@ -94,10 +95,10 @@ impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
             grid,
         }
     }
-    pub fn new_all_orientations(grid: Grid<T>, pattern_size: Size) -> Self {
+    pub fn new_all_orientations(grid: Grid<T>, pattern_size: u32) -> Self {
         Self::new(grid, pattern_size, &orientation::ALL)
     }
-    pub fn new_original_orientation(grid: Grid<T>, pattern_size: Size) -> Self {
+    pub fn new_original_orientation(grid: Grid<T>, pattern_size: u32) -> Self {
         Self::new(grid, pattern_size, &[Orientation::Original])
     }
     pub fn grid(&self) -> &Grid<T> {

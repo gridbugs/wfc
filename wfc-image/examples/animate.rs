@@ -39,7 +39,7 @@ fn main() {
     .parse_env_default_or_exit();
     println!("seed: {}", seed);
     let image = image::open(input_path).unwrap();
-    let pattern_size = Size::new(3, 3);
+    let pattern_size = 3;
     let output_size = Size::new(width, height);
     let mut image_patterns =
         ImagePatterns::new(&image, pattern_size, &[Orientation::Original]);
@@ -54,7 +54,7 @@ fn main() {
         None
     };
     let wrapped_top_left_corner_id = if anchor_top {
-        let coord = Coord::new(0, input_size.y() as i32 - pattern_size.y() as i32 + 1);
+        let coord = Coord::new(0, input_size.y() as i32 - pattern_size as i32 + 1);
         let pattern_id = *id_grid.get_checked(coord);
         image_patterns.pattern_mut(pattern_id).clear_count();
         Some(pattern_id)
@@ -83,10 +83,8 @@ fn main() {
         }
         if let Some(wrapped_top_left_corner_id) = wrapped_top_left_corner_id {
             for i in 0..(output_size.width() as i32) {
-                let coord = Coord::new(
-                    i,
-                    output_size.height() as i32 - pattern_size.height() as i32 + 1,
-                );
+                let coord =
+                    Coord::new(i, output_size.height() as i32 - pattern_size as i32 + 1);
                 run.forbid_all_patterns_except(coord, wrapped_top_left_corner_id)
                     .unwrap();
             }

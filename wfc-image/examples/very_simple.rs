@@ -12,15 +12,16 @@ fn main() {
     let input_path = &args[1];
     let output_path = &args[2];
     let input_image = image::open(input_path).unwrap();
-    let output_size = OutputSize(Size::new(48, 48));
-    let pattern_size = PatternSize(Size::new(3, 3));
+    let output_size = Size::new(48, 48);
+    let pattern_size = 3;
     let output_image = wfc_image::generate_image(
         &input_image,
         pattern_size,
         output_size,
         &[Orientation::Original],
         wrap::WrapXY,
-        retry::Forever,
-    );
-    output_image.save(output_path).unwrap();
+        retry::NumTimes(10),
+    )
+    .expect("Too many contradictions");
+    output_image.save(output_path).expect("Failed to save");
 }

@@ -28,7 +28,7 @@ fn main() {
     println!("seed: {}", seed);
     let mut rng = XorShiftRng::seed_from_u64(seed);
     let image = image::load_from_memory(include_bytes!("flowers.png")).unwrap();
-    let pattern_size = Size::new(3, 3);
+    let pattern_size = 3;
     let mut image_patterns =
         ImagePatterns::new(&image, pattern_size, &[Orientation::Original]);
     let output_size = Size::new(48, 48);
