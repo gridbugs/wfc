@@ -475,7 +475,7 @@ impl WaveCell {
         for (pattern_id, pattern_stats) in
             self.weighted_compatible_stats_enumerate(global_stats)
         {
-            if remaining > pattern_stats.weight() {
+            if remaining >= pattern_stats.weight() {
                 remaining -= pattern_stats.weight();
             } else {
                 assert!(global_stats.pattern_stats(pattern_id).is_some());
