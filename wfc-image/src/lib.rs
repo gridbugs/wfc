@@ -161,6 +161,19 @@ impl retry::ImageRetry for retry::Forever {
     }
 }
 
+impl retry::ImageRetry for retry::NumTimes {
+    type ImageReturn = Result<DynamicImage, PropagateError>;
+    fn image_return(
+        r: Self::Return,
+        image_patterns: &ImagePatterns,
+    ) -> Self::ImageReturn {
+        match r {
+            Ok(r) => Ok(image_patterns.image_from_wave(&r)),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 pub fn generate_image_with_rng<W, IR, R>(
     image: &DynamicImage,
     pattern_size: PatternSize,
