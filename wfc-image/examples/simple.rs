@@ -30,7 +30,7 @@ fn main() {
     let output_size = OutputSize(Size::new(48, 48));
     let mut rng = StdRng::seed_from_u64(seed);
     let start_time = ::std::time::Instant::now();
-    let output_image = generate_image_with_rng(
+    match generate_image_with_rng(
         &input_image,
         pattern_size,
         output_size,
@@ -38,9 +38,12 @@ fn main() {
         wrap::WrapXY,
         retry::NumTimes(1),
         &mut rng,
-    )
-    .expect("Too many contradictions");
-    let end_time = ::std::time::Instant::now();
-    println!("{:?}", end_time - start_time);
-    output_image.save(output_path).unwrap();
+    ) {
+        Err(_) => panic!("Too many contradictions"),
+        Ok(output_image) => {
+            let end_time = ::std::time::Instant::now();
+            println!("{:?}", end_time - start_time);
+            output_image.save(output_path).unwrap();
+        }
+    }
 }
