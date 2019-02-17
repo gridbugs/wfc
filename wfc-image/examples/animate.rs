@@ -30,6 +30,7 @@ fn main() {
         height,
         delay,
         pattern_size,
+        all_orientations,
     ) = args_all! {
         opt("s", "seed", "rng seed", "INT")
             .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen())),
@@ -41,16 +42,26 @@ fn main() {
         opt_default::<u32>("y", "height", "height", "INT", 48),
         opt::<u64>("d", "delay", "delay between steps", "MS"),
         opt_default::<u32>("p", "pattern-size", "size of patterns in pixels", "INT",  3),
+        flag("a", "all-orientations", "all orientations"),
     }
     .with_help_default()
     .parse_env_default_or_exit();
+    if (anchor_top || anchor_bottom) && all_orientations {
+        eprintln!("Can't anchor with all orientations");
+        ::std::process::exit(1);
+    }
     println!("seed: {}", seed);
+    let orientation: &[Orientation] = if all_orientations {
+        &orientation::ALL
+    } else {
+        &[Orientation::Original]
+    };
     let image = image::open(input_path).unwrap();
     let output_size = Size::new(width, height);
     let mut image_patterns = ImagePatterns::new(
         &image,
         NonZeroU32::new(pattern_size).expect("pattern size may not be zero"),
-        &[Orientation::Original],
+        orientation,
     );
     let input_size = image_patterns.grid().size();
     let id_grid = image_patterns.id_grid_original_orientation();
