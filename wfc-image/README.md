@@ -60,3 +60,28 @@ from a specified image file.
 ![Cat Input](/images/cat.png)
 ->
 ![cat Animation](/images/cat-animate.gif)
+
+### Anchor
+
+Takes the tile in the bottom-right corner and forces it to appear along the entire
+bottom and right sides of the output, wrapping to the top and left sides. This is
+an easy way to prevent the output from wrapping. Optionally, the bottom-right corner
+tile (which is often blank) can be removed from the choices of tiles for other cells.
+
+The point of this example is to easily experiment with generating levels for roguelikes.
+
+By default the bottom-right corner tile is removed from the possibilities for other cells:
+
+```bash
+cargo run --release --example=anchor -- -i examples/cat.png -o /tmp/a.png -p3 -x100 -y10
+```
+
+![cat maze](/images/cat-maze.png)
+
+You can allow the bottom-right corner tile to appear in other tiles with the `--allow-corner` flag.
+
+```bash
+cargo run --release --example=anchor -- -i examples/cat.png -o /tmp/a.png -p3 -x100 -y10 --allow-corner
+```
+
+![cat maze sparse](/images/cat-maze-sparse.png)

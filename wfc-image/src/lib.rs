@@ -4,8 +4,7 @@ extern crate image;
 extern crate rand;
 extern crate wfc;
 
-use coord_2d::Coord;
-pub use coord_2d::Size;
+pub use coord_2d::{Coord, Size};
 use grid_2d::Grid;
 use image::{DynamicImage, Rgba, RgbaImage};
 use rand::Rng;
@@ -90,11 +89,19 @@ impl ImagePatterns {
                     .map(|(pattern_id, weight)| {
                         let &Rgba { data: [r, g, b, a] } =
                             self.overlapping_patterns.pattern_top_left_value(pattern_id);
-                        (r as u32 * weight, g as u32 * weight, b as u32 * weight, a as u32 * weight)
+                        (
+                            r as u32 * weight,
+                            g as u32 * weight,
+                            b as u32 * weight,
+                            a as u32 * weight,
+                        )
                     })
-                    .fold((0, 0, 0, 0), |(acc_r, acc_g, acc_b, acc_a), (r, g, b, a)| {
-                        (acc_r + r, acc_g + g, acc_b + b, acc_a + a)
-                    });
+                    .fold(
+                        (0, 0, 0, 0),
+                        |(acc_r, acc_g, acc_b, acc_a), (r, g, b, a)| {
+                            (acc_r + r, acc_g + g, acc_b + b, acc_a + a)
+                        },
+                    );
                 let total_weight = cell.sum_compatible_pattern_weight();
                 Rgba {
                     data: [
