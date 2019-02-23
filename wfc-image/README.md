@@ -6,6 +6,9 @@
 A helper for [wfc](https://github.com/stevebob/wfc/tree/master/wfc) to simplify generating
 images based on image files, using the [image](https://crates.io/crates/image) crate.
 
+Read [this page](https://gridbugs.org/wave-function-collapse/) for a description of how
+the Wave Function Collapse algorithm works.
+
 ## Examples
 
 Most of the sample images are taken from [mxgmn/WaveFunctionCollapse](https://github.com/mxgmn/WaveFunctionCollapse).
