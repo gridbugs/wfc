@@ -7,7 +7,7 @@ extern crate wfc;
 use coord_2d::Coord;
 pub use coord_2d::Size;
 use grid_2d::Grid;
-use image::{DynamicImage, Rgb, RgbImage};
+use image::{DynamicImage, Rgba, RgbaImage};
 use rand::Rng;
 use std::num::NonZeroU32;
 use wfc::orientation::OrientationTable;
@@ -34,8 +34,8 @@ pub mod retry {
 }
 
 pub struct ImagePatterns {
-    overlapping_patterns: OverlappingPatterns<Rgb<u8>>,
-    empty_colour: Rgb<u8>,
+    overlapping_patterns: OverlappingPatterns<Rgba<u8>>,
+    empty_colour: Rgba<u8>,
 }
 
 impl ImagePatterns {
@@ -44,26 +44,26 @@ impl ImagePatterns {
         pattern_size: NonZeroU32,
         orientations: &[Orientation],
     ) -> Self {
-        let rgb_image = image.to_rgb();
-        let size = Size::new(rgb_image.width(), rgb_image.height());
+        let rgba_image = image.to_rgba();
+        let size = Size::new(rgba_image.width(), rgba_image.height());
         let grid = Grid::new_fn(size, |Coord { x, y }| {
-            *rgb_image.get_pixel(x as u32, y as u32)
+            *rgba_image.get_pixel(x as u32, y as u32)
         });
         let overlapping_patterns =
             OverlappingPatterns::new(grid, pattern_size, orientations);
         Self {
             overlapping_patterns,
-            empty_colour: Rgb { data: [0, 0, 0] },
+            empty_colour: Rgba { data: [0, 0, 0, 0] },
         }
     }
 
-    pub fn set_empty_colour(&mut self, empty_colour: Rgb<u8>) {
+    pub fn set_empty_colour(&mut self, empty_colour: Rgba<u8>) {
         self.empty_colour = empty_colour;
     }
 
     pub fn image_from_wave(&self, wave: &Wave) -> DynamicImage {
         let size = wave.grid().size();
-        let mut rgb_image = RgbImage::new(size.width(), size.height());
+        let mut rgba_image = RgbaImage::new(size.width(), size.height());
         wave.grid().enumerate().for_each(|(Coord { x, y }, cell)| {
             let colour = match cell.chosen_pattern_id() {
                 Ok(pattern_id) => {
@@ -71,12 +71,12 @@ impl ImagePatterns {
                 }
                 Err(_) => self.empty_colour,
             };
-            rgb_image.put_pixel(x as u32, y as u32, colour);
+            rgba_image.put_pixel(x as u32, y as u32, colour);
         });
-        DynamicImage::ImageRgb8(rgb_image)
+        DynamicImage::ImageRgba8(rgba_image)
     }
 
-    pub fn weighted_average_colour<'a>(&self, cell: &'a WaveCellRef<'a>) -> Rgb<u8> {
+    pub fn weighted_average_colour<'a>(&self, cell: &'a WaveCellRef<'a>) -> Rgba<u8> {
         use wfc::EnumerateCompatiblePatternWeights::*;
         match cell.enumerate_compatible_pattern_weights() {
             MultipleCompatiblePatternsWithoutWeights | NoCompatiblePattern => {
@@ -86,28 +86,29 @@ impl ImagePatterns {
                 *self.overlapping_patterns.pattern_top_left_value(pattern_id)
             }
             CompatiblePatternsWithWeights(iter) => {
-                let (r, g, b) = iter
+                let (r, g, b, a) = iter
                     .map(|(pattern_id, weight)| {
-                        let &Rgb { data: [r, g, b] } =
+                        let &Rgba { data: [r, g, b, a] } =
                             self.overlapping_patterns.pattern_top_left_value(pattern_id);
-                        (r as u32 * weight, g as u32 * weight, b as u32 * weight)
+                        (r as u32 * weight, g as u32 * weight, b as u32 * weight, a as u32 * weight)
                     })
-                    .fold((0, 0, 0), |(acc_r, acc_g, acc_b), (r, g, b)| {
-                        (acc_r + r, acc_g + g, acc_b + b)
+                    .fold((0, 0, 0, 0), |(acc_r, acc_g, acc_b, acc_a), (r, g, b, a)| {
+                        (acc_r + r, acc_g + g, acc_b + b, acc_a + a)
                     });
                 let total_weight = cell.sum_compatible_pattern_weight();
-                Rgb {
+                Rgba {
                     data: [
                         (r / total_weight) as u8,
                         (g / total_weight) as u8,
                         (b / total_weight) as u8,
+                        (a / total_weight) as u8,
                     ],
                 }
             }
         }
     }
 
-    pub fn grid(&self) -> &Grid<Rgb<u8>> {
+    pub fn grid(&self) -> &Grid<Rgba<u8>> {
         self.overlapping_patterns.grid()
     }
 
