@@ -20,7 +20,7 @@ rand = "0.6"
 [dev-dependencies]
 rand_xorshift = "0.1"
 simon = "0.2"
-pixel_grid = "0.4"
+pixel_grid = "0.5"
 
 [[example]]
 name = "simple"
