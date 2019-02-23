@@ -12,7 +12,6 @@ use rand_xorshift::XorShiftRng;
 use simon::*;
 use std::num::NonZeroU32;
 use wfc::retry::*;
-use wfc::wrap::*;
 use wfc::*;
 use wfc_image::*;
 
@@ -49,9 +48,9 @@ impl Args {
                     input_image: image::open(input_path).unwrap(),
                     output_path,
                     orientations: if all_orientations {
-                        &[Orientation::Original]
-                    } else {
                         &orientation::ALL
+                    } else {
+                        &[Orientation::Original]
                     },
                     retries,
                     allow_corner,
@@ -61,7 +60,32 @@ impl Args {
     }
 }
 
+struct Forbid {
+    pattern_ids: HashSet<PatternId>,
+    offset: i32,
+}
+
+impl ForbidPattern for Forbid {
+    fn forbid<W: Wrap, R: Rng>(&mut self, fi: &mut ForbidInterface<W>, rng: &mut R) {
+        let output_size = fi.wave_size();
+        (0..(output_size.width() as i32))
+            .map(|x| Coord::new(x, output_size.height() as i32 - self.offset as i32))
+            .chain(
+                (0..(output_size.width() as i32)).map(|y| {
+                    Coord::new(output_size.width() as i32 - self.offset as i32, y)
+                }),
+            )
+            .for_each(|coord| {
+                self.pattern_ids.iter().for_each(|&pattern_id| {
+                    fi.forbid_all_patterns_except(coord, pattern_id, rng)
+                        .unwrap();
+                });
+            });
+    }
+}
+
 fn app(args: Args) -> Result<(), ()> {
+    println!("{}", args.seed);
     let mut rng = XorShiftRng::seed_from_u64(args.seed);
     let mut image_patterns = ImagePatterns::new(
         &args.input_image,
@@ -89,26 +113,17 @@ fn app(args: Args) -> Result<(), ()> {
     let mut wave = Wave::new(args.output_size);
     let mut context = Context::new();
     let result = {
-        let mut run =
-            RunBorrow::new(&mut context, &mut wave, &global_stats, WrapXY, &mut rng);
-        (0..(args.output_size.width() as i32))
-            .map(|x| {
-                Coord::new(
-                    x,
-                    args.output_size.height() as i32 - bottom_right_offset as i32,
-                )
-            })
-            .chain((0..(args.output_size.width() as i32)).map(|y| {
-                Coord::new(
-                    args.output_size.width() as i32 - bottom_right_offset as i32,
-                    y,
-                )
-            }))
-            .for_each(|coord| {
-                bottom_right_ids.iter().for_each(|&pattern_id| {
-                    run.forbid_all_patterns_except(coord, pattern_id).unwrap();
-                });
-            });
+        let forbid = Forbid {
+            pattern_ids: bottom_right_ids,
+            offset: bottom_right_offset as i32,
+        };
+        let mut run = RunBorrow::new_forbid(
+            &mut context,
+            &mut wave,
+            &global_stats,
+            forbid,
+            &mut rng,
+        );
         run.collapse_retrying(NumTimes(args.retries), &mut rng)
     };
     match result {

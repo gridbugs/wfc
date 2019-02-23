@@ -73,7 +73,7 @@ The point of this example is to easily experiment with generating levels for rog
 By default the bottom-right corner tile is removed from the possibilities for other cells:
 
 ```bash
-cargo run --release --example=anchor -- -i examples/cat.png -o /tmp/a.png -p3 -x100 -y10
+cargo run --release --example=anchor -- -a -i examples/cat.png -o /tmp/a.png -p3 -x100 -y10
 ```
 
 ![cat maze](/images/cat-maze.png)
@@ -81,7 +81,7 @@ cargo run --release --example=anchor -- -i examples/cat.png -o /tmp/a.png -p3 -x
 You can allow the bottom-right corner tile to appear in other tiles with the `--allow-corner` flag.
 
 ```bash
-cargo run --release --example=anchor -- -i examples/cat.png -o /tmp/a.png -p3 -x100 -y10 --allow-corner
+cargo run --release --example=anchor -- -a -i examples/cat.png -o /tmp/a.png -p3 -x100 -y10 --allow-corner
 ```
 
 ![cat maze sparse](/images/cat-maze-sparse.png)

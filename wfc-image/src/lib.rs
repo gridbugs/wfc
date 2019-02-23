@@ -14,8 +14,9 @@ pub use wfc::orientation::{self, Orientation};
 use wfc::overlapping::{OverlappingPatterns, Pattern};
 use wfc::retry as wfc_retry;
 pub use wfc::wrap;
+pub use wfc::ForbidNothing;
 use wfc::*;
-use wrap::Wrap;
+pub use wrap::WrapXY;
 
 pub mod retry {
     pub use wfc_retry::RetryOwn as Retry;
@@ -139,20 +140,22 @@ impl ImagePatterns {
         self.overlapping_patterns.global_stats()
     }
 
-    pub fn collapse_wave_retrying<W, RT, R>(
+    pub fn collapse_wave_retrying<W, F, RT, R>(
         &self,
         output_size: Size,
         wrap: W,
+        forbid: F,
         retry: RT,
         rng: &mut R,
     ) -> RT::Return
     where
         W: Wrap,
+        F: ForbidPattern,
         RT: retry::Retry,
         R: Rng,
     {
         let global_stats = self.global_stats();
-        let run = RunOwn::new(output_size, &global_stats, wrap, rng);
+        let run = RunOwn::new_wrap_forbid(output_size, &global_stats, wrap, forbid, rng);
         run.collapse_retrying(retry, rng)
     }
 }
@@ -180,37 +183,41 @@ impl retry::ImageRetry for retry::NumTimes {
     }
 }
 
-pub fn generate_image_with_rng<W, IR, R>(
+pub fn generate_image_with_rng<W, F, IR, R>(
     image: &DynamicImage,
     pattern_size: NonZeroU32,
     output_size: Size,
     orientations: &[Orientation],
     wrap: W,
+    forbid: F,
     retry: IR,
     rng: &mut R,
 ) -> IR::ImageReturn
 where
     W: Wrap,
+    F: ForbidPattern,
     IR: retry::ImageRetry,
     R: Rng,
 {
     let image_patterns = ImagePatterns::new(image, pattern_size, orientations);
     IR::image_return(
-        image_patterns.collapse_wave_retrying(output_size, wrap, retry, rng),
+        image_patterns.collapse_wave_retrying(output_size, wrap, forbid, retry, rng),
         &image_patterns,
     )
 }
 
-pub fn generate_image<W, IR>(
+pub fn generate_image<W, F, IR>(
     image: &DynamicImage,
     pattern_size: NonZeroU32,
     output_size: Size,
     orientations: &[Orientation],
     wrap: W,
+    forbid: F,
     retry: IR,
 ) -> IR::ImageReturn
 where
     W: Wrap,
+    F: ForbidPattern,
     IR: retry::ImageRetry,
 {
     generate_image_with_rng(
@@ -219,6 +226,7 @@ where
         output_size,
         orientations,
         wrap,
+        forbid,
         retry,
         &mut rand::thread_rng(),
     )

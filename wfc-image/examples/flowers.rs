@@ -12,9 +12,34 @@ use pixel_grid::{Window, WindowSpec};
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use std::num::NonZeroU32;
-use wfc::wrap::*;
 use wfc::*;
 use wfc_image::ImagePatterns;
+
+struct Forbid {
+    bottom_left_corner_id: PatternId,
+    flower_id: PatternId,
+    sprout_coord: Coord,
+    sprout_id: PatternId,
+}
+
+impl ForbidPattern for Forbid {
+    fn forbid<W: Wrap, R: Rng>(&mut self, fi: &mut ForbidInterface<W>, rng: &mut R) {
+        fi.forbid_all_patterns_except(self.sprout_coord, self.sprout_id, rng)
+            .unwrap();
+        let output_size = fi.wave_size();
+        for i in 0..(output_size.width() as i32) {
+            let coord = Coord::new(i, output_size.height() as i32 - 1);
+            fi.forbid_all_patterns_except(coord, self.bottom_left_corner_id, rng)
+                .unwrap();
+        }
+        for i in 0..8 {
+            for j in 0..(output_size.width() as i32) {
+                let coord = Coord::new(j, output_size.height() as i32 - 1 - i);
+                fi.forbid_pattern(coord, self.flower_id, rng).unwrap();
+            }
+        }
+    }
+}
 
 fn main() {
     use simon::*;
@@ -50,35 +75,31 @@ fn main() {
     let bottom_left_corner_id = *id_grid.get_checked(bottom_left_corner_coord);
     let sprout_id = *id_grid.get_checked(Coord::new(7, 21));
     let flower_id = *id_grid.get_checked(Coord::new(4, 1));
-
     image_patterns
         .pattern_mut(bottom_left_corner_id)
         .clear_count();
-
     let wave = {
         let global_stats = image_patterns.global_stats();
         let mut wave = Wave::new(output_size);
         'generate: loop {
             let mut context = Context::new();
-            let mut run =
-                RunBorrow::new(&mut context, &mut wave, &global_stats, WrapXY, &mut rng);
             let sprout_coord = Coord::new(
                 (rng.gen::<u32>() % output_size.width()) as i32,
                 output_size.height() as i32 - 2,
             );
-            run.forbid_all_patterns_except(sprout_coord, sprout_id)
-                .unwrap();
-            for i in 0..(output_size.width() as i32) {
-                let coord = Coord::new(i, output_size.height() as i32 - 1);
-                run.forbid_all_patterns_except(coord, bottom_left_corner_id)
-                    .unwrap();
-            }
-            for i in 0..8 {
-                for j in 0..(output_size.width() as i32) {
-                    let coord = Coord::new(j, output_size.height() as i32 - 1 - i);
-                    run.forbid_pattern(coord, flower_id).unwrap();
-                }
-            }
+            let forbid = Forbid {
+                bottom_left_corner_id,
+                flower_id,
+                sprout_coord,
+                sprout_id,
+            };
+            let mut run = RunBorrow::new_forbid(
+                &mut context,
+                &mut wave,
+                &global_stats,
+                forbid,
+                &mut rng,
+            );
             'inner: loop {
                 match run.step(&mut rng) {
                     Ok(observe) => {
