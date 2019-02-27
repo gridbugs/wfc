@@ -14,7 +14,7 @@ pub use wrap::WrapXY;
 
 pub mod retry {
     pub use super::wfc_retry::RetryOwn as Retry;
-    pub use super::wfc_retry::{Forever, NumTimes};
+    pub use super::wfc_retry::{Forever, NumTimes, ParNumTimes};
 
     pub trait ImageRetry: Retry {
         type ImageReturn;
@@ -143,7 +143,7 @@ impl ImagePatterns {
         W: Wrap,
         F: ForbidPattern,
         RT: retry::Retry,
-        R: Rng,
+        R: Rng + Send + Sync + Clone,
     {
         let global_stats = self.global_stats();
         let run = RunOwn::new_wrap_forbid(output_size, &global_stats, wrap, forbid, rng);
@@ -174,6 +174,19 @@ impl retry::ImageRetry for retry::NumTimes {
     }
 }
 
+impl retry::ImageRetry for retry::ParNumTimes {
+    type ImageReturn = Result<DynamicImage, PropagateError>;
+    fn image_return(
+        r: Self::Return,
+        image_patterns: &ImagePatterns,
+    ) -> Self::ImageReturn {
+        match r {
+            Ok(r) => Ok(image_patterns.image_from_wave(&r)),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 pub fn generate_image_with_rng<W, F, IR, R>(
     image: &DynamicImage,
     pattern_size: NonZeroU32,
@@ -188,7 +201,7 @@ where
     W: Wrap,
     F: ForbidPattern,
     IR: retry::ImageRetry,
-    R: Rng,
+    R: Rng + Send + Sync + Clone,
 {
     let image_patterns = ImagePatterns::new(image, pattern_size, orientations);
     IR::image_return(
@@ -219,6 +232,6 @@ where
         wrap,
         forbid,
         retry,
-        &mut rand::thread_rng(),
+        &mut rand::rngs::StdRng::from_entropy(),
     )
 }

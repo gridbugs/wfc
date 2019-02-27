@@ -308,7 +308,7 @@ impl NumWaysToBecomePattern {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct WaveCell {
     // random value to break entropy ties
     noise: u32,
@@ -503,6 +503,7 @@ impl WaveCell {
     }
 }
 
+#[derive(Clone)]
 pub struct Wave {
     grid: Grid<WaveCell>,
 }
@@ -523,13 +524,13 @@ impl Wave {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 struct RemovedPattern {
     coord: Coord,
     pattern_id: PatternId,
 }
 
-#[derive(Default)]
+#[derive(Default,Clone)]
 struct Propagator {
     removed_patterns_to_propagate: Vec<RemovedPattern>,
 }
@@ -606,7 +607,7 @@ impl Propagator {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 struct CoordEntropy {
     coord: Coord,
     entropy_with_noise: EntropyWithNoise,
@@ -632,7 +633,7 @@ impl Ord for CoordEntropy {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Observer {
     entropy_priority_queue: BinaryHeap<CoordEntropy>,
 }
@@ -710,7 +711,7 @@ impl Observer {
     }
 }
 
-#[derive(Default)]
+#[derive(Default,Clone)]
 pub struct Context {
     propagator: Propagator,
     entropy_changes_by_coord: HashMap<Coord, EntropyWithNoise>,
@@ -1203,6 +1204,7 @@ impl<'a, 'b, W: Wrap> ForbidInterface<'a, 'b, W> {
     }
 }
 
+#[derive(Clone)]
 /// Represents a running instance of wfc which allocates and owns its resources
 pub struct RunOwn<'a, W: Wrap = WrapXY, F: ForbidPattern = ForbidNothing> {
     context: Context,
@@ -1329,7 +1331,7 @@ impl<'a, W: Wrap, F: ForbidPattern> RunOwn<'a, W, F> {
 
     pub fn collapse_retrying<R, RO>(self, mut retry: RO, rng: &mut R) -> RO::Return
     where
-        R: Rng,
+        R: Rng + Send + Sync + Clone,
         RO: retry::RetryOwn,
     {
         retry.retry(self, rng)
