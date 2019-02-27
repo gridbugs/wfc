@@ -50,12 +50,12 @@ impl RetryOwn for ParNumTimes {
     {
         (0..self.0).into_par_iter()
             .map(|_|{
-                let mut c = run.clone();
-                let i = c.collapse(&mut rng.clone());
-                (i.is_ok(), c.into_wave())
+                let mut runner = run.clone();
+                let collapse_result = runner.collapse(&mut rng.clone());
+                collapse_result.map( |_| runner.into_wave())
             })
-            .find_any(|i| i.0 )
-            .map(|i|i.1)
+            .find_any(|i| i.is_ok() )
+            .map(|i|i.unwrap())
             .ok_or(PropagateError::Contradiction)
     }
 }
