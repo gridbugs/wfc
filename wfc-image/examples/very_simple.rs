@@ -20,7 +20,8 @@ fn main() {
         pattern_size,
         output_size,
         &[Orientation::Original],
-        wrap::WrapXY,
+        WrapXY,
+        ForbidNothing,
         retry::NumTimes(10),
     )
     .expect("Too many contradictions");

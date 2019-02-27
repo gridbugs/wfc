@@ -94,6 +94,9 @@ impl<T> OrientationTable<T> {
     pub fn insert(&mut self, orientation: Orientation, value: T) {
         self.table[orientation as usize] = Some(value);
     }
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.table.iter().filter_map(|t| t.as_ref())
+    }
 }
 
 #[cfg(test)]

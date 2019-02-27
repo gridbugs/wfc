@@ -7,8 +7,7 @@ extern crate wfc;
 
 use rand::FromEntropy;
 use rayon::prelude::*;
-use coord_2d::Coord;
-pub use coord_2d::Size;
+pub use coord_2d::{Coord, Size};
 use grid_2d::Grid;
 use image::{DynamicImage, Rgba, RgbaImage};
 use rand::Rng;
@@ -18,8 +17,9 @@ pub use wfc::orientation::{self, Orientation};
 use wfc::overlapping::{OverlappingPatterns, Pattern};
 use wfc::retry as wfc_retry;
 pub use wfc::wrap;
+pub use wfc::ForbidNothing;
 use wfc::*;
-use wrap::Wrap;
+pub use wrap::WrapXY;
 
 pub mod retry {
     pub use wfc_retry::RetryOwn as Retry;
@@ -93,11 +93,19 @@ impl ImagePatterns {
                     .map(|(pattern_id, weight)| {
                         let &Rgba { data: [r, g, b, a] } =
                             self.overlapping_patterns.pattern_top_left_value(pattern_id);
-                        (r as u32 * weight, g as u32 * weight, b as u32 * weight, a as u32 * weight)
+                        (
+                            r as u32 * weight,
+                            g as u32 * weight,
+                            b as u32 * weight,
+                            a as u32 * weight,
+                        )
                     })
-                    .fold((0, 0, 0, 0), |(acc_r, acc_g, acc_b, acc_a), (r, g, b, a)| {
-                        (acc_r + r, acc_g + g, acc_b + b, acc_a + a)
-                    });
+                    .fold(
+                        (0, 0, 0, 0),
+                        |(acc_r, acc_g, acc_b, acc_a), (r, g, b, a)| {
+                            (acc_r + r, acc_g + g, acc_b + b, acc_a + a)
+                        },
+                    );
                 let total_weight = cell.sum_compatible_pattern_weight();
                 Rgba {
                     data: [
@@ -135,20 +143,22 @@ impl ImagePatterns {
         self.overlapping_patterns.global_stats()
     }
 
-    pub fn collapse_wave_retrying<W, RT, R>(
+    pub fn collapse_wave_retrying<W, F, RT, R>(
         &self,
         output_size: Size,
         wrap: W,
+        forbid: F,
         retry: RT,
         rng: &mut R,
     ) -> RT::Return
     where
         W: Wrap,
+        F: ForbidPattern+ Send + Sync + Clone,
         RT: retry::Retry,
         R: Rng + Send + Sync + Clone,
     {
         let global_stats = self.global_stats();
-        let run = RunOwn::new(output_size, &global_stats, wrap, rng);
+        let run = RunOwn::new_wrap_forbid(output_size, &global_stats, wrap, forbid, rng);
         run.collapse_retrying(retry, rng)
     }
 }
@@ -190,37 +200,41 @@ impl retry::ImageRetry for retry::ParNumTimes {
 }
 
 
-pub fn generate_image_with_rng<W, IR, R>(
+pub fn generate_image_with_rng<W, F, IR, R>(
     image: &DynamicImage,
     pattern_size: NonZeroU32,
     output_size: Size,
     orientations: &[Orientation],
     wrap: W,
+    forbid: F,
     retry: IR,
     rng: &mut R,
 ) -> IR::ImageReturn
 where
     W: Wrap,
+    F: ForbidPattern + Send + Sync + Clone,
     IR: retry::ImageRetry,
     R: Rng + Send + Sync + Clone,
 {
     let image_patterns = ImagePatterns::new(image, pattern_size, orientations);
     IR::image_return(
-        image_patterns.collapse_wave_retrying(output_size, wrap, retry, rng),
+        image_patterns.collapse_wave_retrying(output_size, wrap, forbid, retry, rng),
         &image_patterns,
     )
 }
 
-pub fn generate_image<W, IR>(
+pub fn generate_image<W, F, IR>(
     image: &DynamicImage,
     pattern_size: NonZeroU32,
     output_size: Size,
     orientations: &[Orientation],
     wrap: W,
+    forbid: F,
     retry: IR,
 ) -> IR::ImageReturn
 where
     W: Wrap,
+    F: ForbidPattern + Send + Sync + Clone,
     IR: retry::ImageRetry,
 {
     generate_image_with_rng(
@@ -229,6 +243,7 @@ where
         output_size,
         orientations,
         wrap,
+        forbid,
         retry,
         &mut rand::rngs::StdRng::from_entropy(),
     )

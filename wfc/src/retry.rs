@@ -1,12 +1,13 @@
 use rand::Rng;
-use wfc::{PropagateError, RunBorrow, RunOwn, Wave};
+use wfc::{ForbidPattern, PropagateError, RunBorrow, RunOwn, Wave};
 use wrap::Wrap;
 
-pub trait RetryOwn: Copy + private::Sealed {
+pub trait RetryOwn: private::Sealed {
     type Return;
-    fn retry<'a, W, R>(&mut self, run: RunOwn<'a, W>, rng: &mut R) -> Self::Return
+    fn retry<'a, W, F, R>(&mut self, run: RunOwn<'a, W, F>, rng: &mut R) -> Self::Return
     where
         W: Wrap,
+        F: ForbidPattern + Clone + Send  + Sync,
         R: Rng + Sync + Send + Clone;
 }
 
@@ -15,9 +16,14 @@ pub struct Forever;
 
 impl RetryOwn for Forever {
     type Return = Wave;
-    fn retry<'a, W, R>(&mut self, mut run: RunOwn<'a, W>, rng: &mut R) -> Self::Return
+    fn retry<'a, W, F, R>(
+        &mut self,
+        mut run: RunOwn<'a, W, F>,
+        rng: &mut R,
+    ) -> Self::Return
     where
         W: Wrap,
+        F: ForbidPattern,
         R: Rng,
     {
         loop {
@@ -36,9 +42,10 @@ pub struct ParNumTimes(pub usize);
 
 impl RetryOwn for ParNumTimes {
     type Return = Result<Wave, PropagateError>;
-    fn retry<'a, W, R>(&mut self, run: RunOwn<'a, W>, rng: &mut R) -> Self::Return
+    fn retry<'a, W, F, R>(&mut self, run: RunOwn<'a, W, F>, rng: &mut R) -> Self::Return
     where
         W: Wrap,
+        F: ForbidPattern + Clone + Send + Sync,
         R: Rng + Sync + Send + Clone,
     {
         (0..self.0).into_par_iter()
@@ -59,9 +66,14 @@ pub struct NumTimes(pub usize);
 
 impl RetryOwn for NumTimes {
     type Return = Result<Wave, PropagateError>;
-    fn retry<'a, W, R>(&mut self, mut run: RunOwn<'a, W>, rng: &mut R) -> Self::Return
+    fn retry<'a, W, F, R>(
+        &mut self,
+        mut run: RunOwn<'a, W, F>,
+        rng: &mut R,
+    ) -> Self::Return
     where
         W: Wrap,
+        F: ForbidPattern,
         R: Rng,
     {
         loop {
@@ -79,23 +91,29 @@ impl RetryOwn for NumTimes {
     }
 }
 
-pub trait RetryBorrow: Copy + private::Sealed {
+pub trait RetryBorrow: private::Sealed {
     type Return;
-    fn retry<'a, W, R>(
+    fn retry<'a, W, F, R>(
         &mut self,
-        run: &mut RunBorrow<'a, W>,
+        run: &mut RunBorrow<'a, W, F>,
         rng: &mut R,
     ) -> Self::Return
     where
         W: Wrap,
+        F: ForbidPattern,
         R: Rng;
 }
 
 impl RetryBorrow for Forever {
     type Return = ();
-    fn retry<'a, W, R>(&mut self, run: &mut RunBorrow<'a, W>, rng: &mut R) -> Self::Return
+    fn retry<'a, W, F, R>(
+        &mut self,
+        run: &mut RunBorrow<'a, W, F>,
+        rng: &mut R,
+    ) -> Self::Return
     where
         W: Wrap,
+        F: ForbidPattern,
         R: Rng,
     {
         loop {
@@ -109,9 +127,14 @@ impl RetryBorrow for Forever {
 
 impl RetryBorrow for NumTimes {
     type Return = Result<(), PropagateError>;
-    fn retry<'a, W, R>(&mut self, run: &mut RunBorrow<'a, W>, rng: &mut R) -> Self::Return
+    fn retry<'a, W, F, R>(
+        &mut self,
+        run: &mut RunBorrow<'a, W, F>,
+        rng: &mut R,
+    ) -> Self::Return
     where
         W: Wrap,
+        F: ForbidPattern,
         R: Rng,
     {
         loop {
