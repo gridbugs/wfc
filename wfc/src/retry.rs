@@ -7,7 +7,7 @@ pub trait RetryOwn: Copy + private::Sealed {
     fn retry<'a, W, R>(&mut self, run: RunOwn<'a, W>, rng: &mut R) -> Self::Return
     where
         W: Wrap,
-        R: Rng;
+        R: Rng + Sync + Send + Clone;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -29,6 +29,30 @@ impl RetryOwn for Forever {
         }
     }
 }
+
+use rayon::prelude::*;
+#[derive(Debug, Clone, Copy)]
+pub struct ParNumTimes(pub usize);
+
+impl RetryOwn for ParNumTimes {
+    type Return = Result<Wave, PropagateError>;
+    fn retry<'a, W, R>(&mut self, run: RunOwn<'a, W>, rng: &mut R) -> Self::Return
+    where
+        W: Wrap,
+        R: Rng + Sync + Send + Clone,
+    {
+        (0..self.0).into_par_iter()
+            .map(|_|{
+                let mut c = run.clone();
+                let i = c.collapse(&mut rng.clone());
+                (i.is_ok(), c.into_wave())
+            })
+            .find_any(|i| i.0 )
+            .map(|i|i.1)
+            .ok_or(PropagateError::Contradiction)
+    }
+}
+
 
 #[derive(Debug, Clone, Copy)]
 pub struct NumTimes(pub usize);
@@ -112,4 +136,5 @@ mod private {
 
     impl Sealed for Forever {}
     impl Sealed for NumTimes {}
+    impl Sealed for ParNumTimes {}
 }

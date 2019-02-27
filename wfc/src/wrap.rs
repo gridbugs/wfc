@@ -1,6 +1,6 @@
 use coord_2d::{Coord, Size};
 
-pub trait Wrap: Copy + private::Sealed {
+pub trait Wrap: Copy + Send + Sync + private::Sealed {
     #[doc(hidden)]
     fn normalize_coord(coord: Coord, size: Size) -> Option<Coord>;
 }
