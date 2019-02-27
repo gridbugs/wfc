@@ -47,7 +47,8 @@ fn app() -> Result<(), ()> {
         pattern_size,
         output_size,
         orientation,
-        wrap::WrapXY,
+        WrapXY,
+        ForbidNothing,
         retry::NumTimes(10),
         &mut rng,
     ) {

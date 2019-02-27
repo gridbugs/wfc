@@ -18,6 +18,35 @@ use wfc::wrap::*;
 use wfc::*;
 use wfc_image::{ImagePatterns, Size};
 
+struct Forbid {
+    wrapped_top_left_corner_id: Option<PatternId>,
+    bottom_left_corner_id: Option<PatternId>,
+    pattern_size: u32,
+}
+
+impl ForbidPattern for Forbid {
+    fn forbid<W: Wrap, R: Rng>(&mut self, fi: &mut ForbidInterface<W>, rng: &mut R) {
+        let output_size = fi.wave_size();
+        if let Some(bottom_left_corner_id) = self.bottom_left_corner_id {
+            for i in 0..(output_size.width() as i32) {
+                let coord = Coord::new(i, output_size.height() as i32 - 1);
+                fi.forbid_all_patterns_except(coord, bottom_left_corner_id, rng)
+                    .unwrap();
+            }
+        }
+        if let Some(wrapped_top_left_corner_id) = self.wrapped_top_left_corner_id {
+            for i in 0..(output_size.width() as i32) {
+                let coord = Coord::new(
+                    i,
+                    output_size.height() as i32 - self.pattern_size as i32 + 1,
+                );
+                fi.forbid_all_patterns_except(coord, wrapped_top_left_corner_id, rng)
+                    .unwrap();
+            }
+        }
+    }
+}
+
 fn main() {
     use simon::*;
     let (
@@ -93,30 +122,25 @@ fn main() {
     let mut context = Context::new();
     let delay = delay.map(Duration::from_millis);
     'generate: loop {
-        let mut run =
-            RunBorrow::new(&mut context, &mut wave, &global_stats, WrapXY, &mut rng);
-        if let Some(bottom_left_corner_id) = bottom_left_corner_id {
-            for i in 0..(output_size.width() as i32) {
-                let coord = Coord::new(i, output_size.height() as i32 - 1);
-                run.forbid_all_patterns_except(coord, bottom_left_corner_id)
-                    .unwrap();
-            }
-        }
-        if let Some(wrapped_top_left_corner_id) = wrapped_top_left_corner_id {
-            for i in 0..(output_size.width() as i32) {
-                let coord =
-                    Coord::new(i, output_size.height() as i32 - pattern_size as i32 + 1);
-                run.forbid_all_patterns_except(coord, wrapped_top_left_corner_id)
-                    .unwrap();
-            }
-        }
+        let forbid = Forbid {
+            bottom_left_corner_id,
+            wrapped_top_left_corner_id,
+            pattern_size,
+        };
+        let mut run = RunBorrow::new_forbid(
+            &mut context,
+            &mut wave,
+            &global_stats,
+            forbid,
+            &mut rng,
+        );
         'inner: loop {
             window.with_pixel_grid(|mut pixel_grid| {
                 run.wave_cell_ref_iter()
                     .zip(pixel_grid.iter_mut())
                     .for_each(|(cell, mut pixel)| {
                         let colour = image_patterns.weighted_average_colour(&cell);
-                        pixel.set_colour_array_u8(colour.data);
+                        pixel.set_colour_array_rgba_u8(colour.data);
                     });
             });
             window.draw();
