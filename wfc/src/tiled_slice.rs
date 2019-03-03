@@ -114,15 +114,18 @@ mod test {
     #[test]
     fn tiled_grid_slice_hash() {
         let mut grid = Grid::new_fn(Size::new(4, 4), |_| 0);
-        *grid.get_mut(Coord::new(3, 3)).unwrap() = 1;
+        *grid.get_mut(Coord::new(1, 3)).unwrap() = 1;
         let size = Size::new(2, 2);
         let a = TiledGridSlice::new(&grid, Coord::new(0, 0), size, Orientation::Original);
         let b = TiledGridSlice::new(&grid, Coord::new(2, 2), size, Orientation::Original);
         let c = TiledGridSlice::new(&grid, Coord::new(0, 2), size, Orientation::Original);
+        let d =
+            TiledGridSlice::new(&grid, Coord::new(1, 2), size, Orientation::Clockwise270);
         let mut set = HashSet::new();
         set.insert(a);
         set.insert(b);
         set.insert(c);
+        set.insert(d);
         assert_eq!(set.len(), 2);
     }
 }

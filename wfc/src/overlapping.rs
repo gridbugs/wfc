@@ -36,14 +36,16 @@ fn are_patterns_compatible<T: PartialEq>(
 
 #[derive(Debug)]
 pub struct Pattern {
+    id: PatternId,
     coords: Vec<Coord>,
     count: u32,
     orientation: Orientation,
 }
 
 impl Pattern {
-    fn new(orientation: Orientation) -> Self {
+    fn new(id: PatternId, orientation: Orientation) -> Self {
         Self {
+            id,
             coords: Vec::new(),
             count: 0,
             orientation,
@@ -68,6 +70,7 @@ pub struct OverlappingPatterns<T: Eq + Clone + Hash> {
     pattern_table: PatternTable<Pattern>,
     pattern_size: Size,
     grid: Grid<T>,
+    id_grid: Grid<OrientationTable<PatternId>>,
 }
 
 impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
@@ -77,30 +80,40 @@ impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
         orientations: &[Orientation],
     ) -> Self {
         let pattern_size = Size::new(pattern_size.get(), pattern_size.get());
+        let empty: OrientationTable<PatternId> = OrientationTable::new();
+        let mut id_grid = Grid::new_clone(grid.size(), empty);
         let pattern_table = {
             let mut pattern_map = HashMap::new();
+            let mut next_id = 0;
             for &orientation in orientations.iter() {
                 for coord in XThenYIter::new(grid.size()) {
                     let pattern_slice =
                         TiledGridSlice::new(&grid, coord, pattern_size, orientation);
-                    let pattern = pattern_map
-                        .entry(pattern_slice.clone())
-                        .or_insert_with(|| Pattern::new(orientation));
+                    let pattern =
+                        pattern_map.entry(pattern_slice.clone()).or_insert_with(|| {
+                            let pattern = Pattern::new(next_id, orientation);
+                            next_id += 1;
+                            pattern
+                        });
                     pattern.coords.push(pattern_slice.offset());
                     pattern.count += 1;
+                    id_grid
+                        .get_checked_mut(coord)
+                        .insert(orientation, pattern.id);
                 }
             }
             let mut patterns = pattern_map
                 .drain()
                 .map(|(_, pattern)| pattern)
                 .collect::<Vec<_>>();
-            patterns.sort_by_key(|pattern| pattern.coord());
+            patterns.sort_by_key(|pattern| pattern.id);
             PatternTable::from_vec(patterns)
         };
         Self {
             pattern_table,
             pattern_size,
             grid,
+            id_grid,
         }
     }
     pub fn new_all_orientations(grid: Grid<T>, pattern_size: NonZeroU32) -> Self {
@@ -124,19 +137,7 @@ impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
         tiled_grid_slice.get_checked(Coord::new(0, 0))
     }
     pub fn id_grid(&self) -> Grid<OrientationTable<PatternId>> {
-        let empty: OrientationTable<PatternId> = OrientationTable::new();
-        let mut id_grid = Grid::new_clone(self.grid.size(), empty);
-        self.pattern_table
-            .iter()
-            .enumerate()
-            .for_each(|(pattern_id_usize, pattern)| {
-                pattern.coords.iter().for_each(|&coord| {
-                    id_grid
-                        .get_checked_mut(coord)
-                        .insert(pattern.orientation, pattern_id_usize as PatternId);
-                });
-            });
-        id_grid
+        self.id_grid.clone()
     }
     pub fn id_grid_original_orientation(&self) -> Grid<PatternId> {
         let id_grid = self.id_grid();
@@ -196,7 +197,7 @@ mod test {
     use orientation::Orientation;
 
     fn pattern_with_coord(coord: Coord) -> Pattern {
-        let mut pattern = Pattern::new(Orientation::Original);
+        let mut pattern = Pattern::new(0, Orientation::Original);
         pattern.coords.push(coord);
         pattern
     }
