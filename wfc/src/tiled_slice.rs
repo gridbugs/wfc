@@ -1,26 +1,22 @@
 use crate::orientation::Orientation;
 use coord_2d::*;
-use grid_2d::coord_system::{CoordSystem, XThenY, XThenYIter};
 use grid_2d::*;
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone)]
-pub struct TiledGridSlice<'a, T: 'a, S: 'a + CoordSystem + Clone = XThenY> {
-    grid: &'a Grid<T, S>,
+pub struct TiledGridSlice<'a, T: 'a> {
+    grid: &'a Grid<T>,
     offset: Coord,
     size: Size,
     orientation: Orientation,
 }
 
-pub struct TiledGridSliceIter<'a, T: 'a, S: 'a + CoordSystem + Clone> {
-    grid: &'a TiledGridSlice<'a, T, S>,
-    coord_iter: XThenYIter,
+pub struct TiledGridSliceIter<'a, T: 'a> {
+    grid: &'a TiledGridSlice<'a, T>,
+    coord_iter: CoordIter,
 }
 
-impl<'a, T, S> Iterator for TiledGridSliceIter<'a, T, S>
-where
-    S: CoordSystem + Clone,
-{
+impl<'a, T> Iterator for TiledGridSliceIter<'a, T> {
     type Item = &'a T;
     fn next(&mut self) -> Option<Self::Item> {
         self.coord_iter
@@ -29,12 +25,9 @@ where
     }
 }
 
-impl<'a, T, S> TiledGridSlice<'a, T, S>
-where
-    S: CoordSystem + Clone,
-{
+impl<'a, T> TiledGridSlice<'a, T> {
     pub fn new(
-        grid: &'a Grid<T, S>,
+        grid: &'a Grid<T>,
         offset: Coord,
         size: Size,
         orientation: Orientation,
@@ -63,18 +56,15 @@ where
     pub fn offset(&self) -> Coord {
         self.offset
     }
-    pub fn iter(&self) -> TiledGridSliceIter<T, S> {
+    pub fn iter(&self) -> TiledGridSliceIter<T> {
         TiledGridSliceIter {
             grid: self,
-            coord_iter: XThenYIter::from(self.size),
+            coord_iter: CoordIter::new(self.size),
         }
     }
 }
 
-impl<'a, T: Hash, S> Hash for TiledGridSlice<'a, T, S>
-where
-    S: CoordSystem + Clone,
-{
+impl<'a, T: Hash> Hash for TiledGridSlice<'a, T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         for value in self.iter() {
             value.hash(state);
@@ -82,15 +72,12 @@ where
     }
 }
 
-impl<'a, T: PartialEq, S> PartialEq for TiledGridSlice<'a, T, S>
-where
-    S: CoordSystem + Clone,
-{
+impl<'a, T: PartialEq> PartialEq for TiledGridSlice<'a, T> {
     fn eq(&self, other: &Self) -> bool {
         self.size == other.size && self.iter().zip(other.iter()).all(|(s, o)| s.eq(o))
     }
 }
-impl<'a, T: Eq, S> Eq for TiledGridSlice<'a, T, S> where S: CoordSystem + Clone {}
+impl<'a, T: Eq> Eq for TiledGridSlice<'a, T> {}
 
 #[cfg(test)]
 mod test {

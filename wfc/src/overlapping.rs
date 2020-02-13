@@ -5,8 +5,7 @@ use crate::{
 };
 use coord_2d::{Coord, Size};
 use direction::{CardinalDirection, CardinalDirectionTable, CardinalDirections};
-use grid_2d::coord_system::XThenYIter;
-use grid_2d::Grid;
+use grid_2d::{CoordIter, Grid};
 use hashbrown::HashMap;
 use std::hash::Hash;
 use std::num::NonZeroU32;
@@ -30,7 +29,7 @@ fn are_patterns_compatible<T: PartialEq>(
         CardinalDirection::East => (Coord::new(1, 0), Coord::new(0, 0)),
         CardinalDirection::West => (Coord::new(0, 0), Coord::new(1, 0)),
     };
-    let coords = || XThenYIter::new(compare_size);
+    let coords = || CoordIter::new(compare_size);
     let a_iter = coords().map(|c| a.get_checked(c + a_offset));
     let b_iter = coords().map(|c| b.get_checked(c + b_offset));
     a_iter.zip(b_iter).all(|(a, b)| a == b)
@@ -88,7 +87,7 @@ impl<T: Eq + Clone + Hash> OverlappingPatterns<T> {
             let mut pattern_map = HashMap::new();
             let mut next_id = 0;
             for &orientation in orientations.iter() {
-                for coord in XThenYIter::new(grid.size()) {
+                for coord in CoordIter::new(grid.size()) {
                     let pattern_slice =
                         TiledGridSlice::new(&grid, coord, pattern_size, orientation);
                     let pattern =

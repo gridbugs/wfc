@@ -46,7 +46,7 @@ impl ImagePatterns {
             OverlappingPatterns::new(grid, pattern_size, orientations);
         Self {
             overlapping_patterns,
-            empty_colour: Rgba { data: [0, 0, 0, 0] },
+            empty_colour: Rgba([0, 0, 0, 0]),
         }
     }
 
@@ -81,7 +81,7 @@ impl ImagePatterns {
             CompatiblePatternsWithWeights(iter) => {
                 let (r, g, b, a) = iter
                     .map(|(pattern_id, weight)| {
-                        let &Rgba { data: [r, g, b, a] } =
+                        let &Rgba([r, g, b, a]) =
                             self.overlapping_patterns.pattern_top_left_value(pattern_id);
                         (
                             r as u32 * weight,
@@ -97,14 +97,12 @@ impl ImagePatterns {
                         },
                     );
                 let total_weight = cell.sum_compatible_pattern_weight();
-                Rgba {
-                    data: [
-                        (r / total_weight) as u8,
-                        (g / total_weight) as u8,
-                        (b / total_weight) as u8,
-                        (a / total_weight) as u8,
-                    ],
-                }
+                Rgba([
+                    (r / total_weight) as u8,
+                    (g / total_weight) as u8,
+                    (b / total_weight) as u8,
+                    (a / total_weight) as u8,
+                ])
             }
         }
     }

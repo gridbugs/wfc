@@ -693,14 +693,15 @@ impl Observer {
                 .grid
                 .index_of_coord(coord_entropy.coord)
                 .expect("Coord out of bounds");
-            if wave.grid[index].stats.num_weighted_compatible_patterns
+            let wave_cell = wave.grid.get_index_checked(index);
+            if wave_cell.stats.num_weighted_compatible_patterns
                 == coord_entropy
                     .entropy_with_noise
                     .num_weighted_compatible_patterns
-                && wave.grid[index].num_compatible_patterns > 1
+                && wave_cell.num_compatible_patterns > 1
             {
                 return ChooseNextCell::MinEntropyCell(CellAtCoordMut {
-                    wave_cell: &mut wave.grid[index],
+                    wave_cell: wave.grid.get_index_checked_mut(index),
                     coord: coord_entropy.coord,
                 });
             }

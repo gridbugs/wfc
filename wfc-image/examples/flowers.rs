@@ -101,7 +101,7 @@ fn main() {
                                     .for_each(|(cell, mut pixel)| {
                                         let colour =
                                             image_patterns.weighted_average_colour(&cell);
-                                        pixel.set_colour_array_rgba_u8(colour.data);
+                                        pixel.set_colour_array_rgba_u8(colour.0);
                                     });
                             });
                             window.draw();
