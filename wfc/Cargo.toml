@@ -8,7 +8,7 @@ readme = "README.md"
 homepage = "https://github.com/stevebob/wfc.git"
 repository = "https://github.com/stevebob/wfc.git"
 documentation = "https://docs.rs/wfc"
-
+edition = "2018"
 
 [dependencies]
 rand = "0.6"

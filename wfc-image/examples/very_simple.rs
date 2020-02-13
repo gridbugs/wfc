@@ -1,6 +1,3 @@
-extern crate image;
-extern crate wfc_image;
-
 use std::num::NonZeroU32;
 use wfc_image::*;
 

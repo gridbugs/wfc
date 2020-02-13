@@ -1,9 +1,3 @@
-extern crate coord_2d;
-extern crate grid_2d;
-extern crate image;
-extern crate rand;
-extern crate wfc;
-
 pub use coord_2d::{Coord, Size};
 use grid_2d::Grid;
 use image::{DynamicImage, Rgba, RgbaImage};
@@ -19,8 +13,8 @@ use wfc::*;
 pub use wrap::WrapXY;
 
 pub mod retry {
-    pub use wfc_retry::RetryOwn as Retry;
-    pub use wfc_retry::{Forever, NumTimes};
+    pub use super::wfc_retry::RetryOwn as Retry;
+    pub use super::wfc_retry::{Forever, NumTimes};
 
     pub trait ImageRetry: Retry {
         type ImageReturn;
@@ -30,7 +24,6 @@ pub mod retry {
             image_patterns: &super::ImagePatterns,
         ) -> Self::ImageReturn;
     }
-
 }
 
 pub struct ImagePatterns {

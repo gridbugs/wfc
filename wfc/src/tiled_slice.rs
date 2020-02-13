@@ -1,7 +1,7 @@
+use crate::orientation::Orientation;
 use coord_2d::*;
 use grid_2d::coord_system::{CoordSystem, XThenY, XThenYIter};
 use grid_2d::*;
-use orientation::Orientation;
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone)]
@@ -95,8 +95,8 @@ impl<'a, T: Eq, S> Eq for TiledGridSlice<'a, T, S> where S: CoordSystem + Clone 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::orientation::Orientation;
     use coord_2d::{Coord, Size};
-    use orientation::Orientation;
     use std::collections::HashSet;
 
     #[test]

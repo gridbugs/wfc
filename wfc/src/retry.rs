@@ -1,6 +1,8 @@
+use crate::{
+    wfc::{ForbidPattern, PropagateError, RunBorrow, RunOwn, Wave},
+    wrap::Wrap,
+};
 use rand::Rng;
-use wfc::{ForbidPattern, PropagateError, RunBorrow, RunOwn, Wave};
-use wrap::Wrap;
 
 pub trait RetryOwn: private::Sealed {
     type Return;

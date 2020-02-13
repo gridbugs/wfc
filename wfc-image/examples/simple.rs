@@ -1,8 +1,3 @@
-extern crate image;
-extern crate rand;
-extern crate simon;
-extern crate wfc_image;
-
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::num::NonZeroU32;

@@ -1,12 +1,3 @@
-extern crate coord_2d;
-extern crate image;
-extern crate pixel_grid;
-extern crate rand;
-extern crate rand_xorshift;
-extern crate simon;
-extern crate wfc;
-extern crate wfc_image;
-
 use coord_2d::{Coord, Size};
 use pixel_grid::{Window, WindowSpec};
 use rand::{Rng, SeedableRng};

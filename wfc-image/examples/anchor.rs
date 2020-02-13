@@ -1,15 +1,7 @@
-extern crate hashbrown;
-extern crate image;
-extern crate rand;
-extern crate rand_xorshift;
-extern crate simon;
-extern crate wfc;
-extern crate wfc_image;
-
-use hashbrown::*;
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use simon::*;
+use std::collections::HashSet;
 use std::num::NonZeroU32;
 use wfc::retry::*;
 use wfc::*;

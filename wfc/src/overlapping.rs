@@ -1,13 +1,15 @@
+use crate::{
+    orientation::{self, Orientation, OrientationTable},
+    tiled_slice::TiledGridSlice,
+    wfc::{GlobalStats, PatternDescription, PatternId, PatternTable},
+};
 use coord_2d::{Coord, Size};
 use direction::{CardinalDirection, CardinalDirectionTable, CardinalDirections};
 use grid_2d::coord_system::XThenYIter;
 use grid_2d::Grid;
 use hashbrown::HashMap;
-use orientation::{self, Orientation, OrientationTable};
 use std::hash::Hash;
 use std::num::NonZeroU32;
-use tiled_slice::TiledGridSlice;
-use wfc::{GlobalStats, PatternDescription, PatternId, PatternTable};
 
 fn are_patterns_compatible<T: PartialEq>(
     a: &TiledGridSlice<T>,
