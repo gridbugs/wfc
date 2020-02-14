@@ -30,7 +30,6 @@ is populated with values, or all the candidates are removed from a cell.
 ->
 ![Flowers Output1](/images/flowers-output1.png)
 ![Flowers Output2](/images/flowers-output2.png)
-![Flowers Output3](/images/flowers-output3.png)
 
 For more image examples, see [wfc-image](https://github.com/stevebob/wfc/tree/master/wfc-image).
 
