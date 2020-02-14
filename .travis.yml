@@ -5,3 +5,4 @@ matrix:
     - rust: stable
       script:
         - cargo test
+        - cargo test --features=parallel
