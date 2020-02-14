@@ -41,7 +41,7 @@ fn main() {
         flag("a", "animate", "animate"),
     }
     .with_help_default()
-    .parse_env_default_or_exit();
+    .parse_env_or_exit();
     println!("seed: {}", seed);
     let mut rng = XorShiftRng::seed_from_u64(seed);
     let image = image::load_from_memory(include_bytes!("flowers.png")).unwrap();

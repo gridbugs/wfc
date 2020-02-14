@@ -19,18 +19,18 @@ struct Args {
 }
 
 impl Args {
-    fn arg() -> ArgExt<impl Arg<Item = Self>> {
+    fn arg() -> impl Arg<Item = Self> {
         args_map! {
             let {
-                width = opt_default("x", "width", "output width", "INT", 48);
-                height = opt_default("y", "height", "output height", "INT", 48);
-                pattern_size = opt_default("p", "pattern-size", "pattern size", "INT", 3);
+                width = opt("x", "width", "output width", "INT").with_default(48);
+                height = opt("y", "height", "output height", "INT").with_default(48);
+                pattern_size = opt("p", "pattern-size", "pattern size", "INT").with_default(3);
                 seed = opt("s", "seed", "rng seed", "INT")
                     .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen()));
-                input_path = opt_required::<String>("i", "input-path", "input path", "PATH");
-                output_path = opt_required("o", "output-path", "output path", "PATH");
+                input_path = opt::<String>("i", "input-path", "input path", "PATH").required();
+                output_path = opt("o", "output-path", "output path", "PATH").required();
                 all_orientations = flag("a", "all-orientations", "include all orientations");
-                retries = opt_default("r", "retries", "number of retries", "INT", 10);
+                retries = opt("r", "retries", "number of retries", "INT").with_default(10);
                 allow_corner = flag("c", "allow-corner", "allow bottom right corner");
             } in {
                 Self {
@@ -134,7 +134,7 @@ fn app(args: Args) -> Result<(), ()> {
 }
 
 fn main() {
-    let args = Args::arg().with_help_default().parse_env_default_or_exit();
+    let args = Args::arg().with_help_default().parse_env_or_exit();
     ::std::process::exit(match app(args) {
         Ok(()) => 0,
         Err(()) => 1,

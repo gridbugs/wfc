@@ -54,18 +54,18 @@ fn main() {
     ) = args_all! {
         opt("s", "seed", "rng seed", "INT")
             .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen())),
-        opt_required::<String>("i", "input", "input path", "PATH"),
+        opt::<String>("i", "input", "input path", "PATH").required(),
         flag("f", "forever", "repeat forever"),
         flag("t", "anchor-top", "anchor top"),
         flag("b", "anchor-bottom", "anchor bottom"),
-        opt_default::<u32>("x", "width", "width", "INT", 48),
-        opt_default::<u32>("y", "height", "height", "INT", 48),
+        opt::<u32>("x", "width", "width", "INT").with_default(48),
+        opt::<u32>("y", "height", "height", "INT").with_default(48),
         opt::<u64>("d", "delay", "delay between steps", "MS"),
-        opt_default::<u32>("p", "pattern-size", "size of patterns in pixels", "INT",  3),
+        opt::<u32>("p", "pattern-size", "size of patterns in pixels", "INT").with_default(3),
         flag("a", "all-orientations", "all orientations"),
     }
     .with_help_default()
-    .parse_env_default_or_exit();
+    .parse_env_or_exit();
     if (anchor_top || anchor_bottom) && all_orientations {
         eprintln!("Can't anchor with all orientations");
         ::std::process::exit(1);
