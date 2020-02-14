@@ -1,7 +1,7 @@
 pub use coord_2d::{Coord, Size};
 use grid_2d::Grid;
 use image::{DynamicImage, Rgba, RgbaImage};
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use std::num::NonZeroU32;
 use wfc::orientation::OrientationTable;
 pub use wfc::orientation::{self, Orientation};
@@ -141,7 +141,7 @@ impl ImagePatterns {
     ) -> RT::Return
     where
         W: Wrap,
-        F: ForbidPattern,
+        F: ForbidPattern + Send + Sync + Clone,
         RT: retry::Retry,
         R: Rng + Send + Sync + Clone,
     {
@@ -199,7 +199,7 @@ pub fn generate_image_with_rng<W, F, IR, R>(
 ) -> IR::ImageReturn
 where
     W: Wrap,
-    F: ForbidPattern,
+    F: ForbidPattern + Send + Sync + Clone,
     IR: retry::ImageRetry,
     R: Rng + Send + Sync + Clone,
 {
@@ -221,7 +221,7 @@ pub fn generate_image<W, F, IR>(
 ) -> IR::ImageReturn
 where
     W: Wrap,
-    F: ForbidPattern,
+    F: ForbidPattern + Send + Sync + Clone,
     IR: retry::ImageRetry,
 {
     generate_image_with_rng(

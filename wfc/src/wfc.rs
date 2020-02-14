@@ -524,13 +524,13 @@ impl Wave {
     }
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 struct RemovedPattern {
     coord: Coord,
     pattern_id: PatternId,
 }
 
-#[derive(Default,Clone)]
+#[derive(Default, Clone)]
 struct Propagator {
     removed_patterns_to_propagate: Vec<RemovedPattern>,
 }
@@ -711,7 +711,7 @@ impl Observer {
     }
 }
 
-#[derive(Default,Clone)]
+#[derive(Default, Clone)]
 pub struct Context {
     propagator: Propagator,
     entropy_changes_by_coord: HashMap<Coord, EntropyWithNoise>,
@@ -861,6 +861,7 @@ pub trait ForbidPattern {
     fn forbid<W: Wrap, R: Rng>(&mut self, fi: &mut ForbidInterface<W>, rng: &mut R);
 }
 
+#[derive(Clone)]
 pub struct ForbidNothing;
 impl ForbidPattern for ForbidNothing {
     fn forbid<W: Wrap, R: Rng>(&mut self, _fi: &mut ForbidInterface<W>, _rng: &mut R) {}
@@ -1244,7 +1245,10 @@ impl<'a, W: Wrap> RunOwn<'a, W> {
     }
 }
 
-impl<'a, F: ForbidPattern> RunOwn<'a, WrapXY, F> {
+impl<'a, F: ForbidPattern> RunOwn<'a, WrapXY, F>
+where
+    F: Clone + Sync + Send,
+{
     pub fn new_forbid<R: Rng>(
         output_size: Size,
         global_stats: &'a GlobalStats,
@@ -1255,7 +1259,10 @@ impl<'a, F: ForbidPattern> RunOwn<'a, WrapXY, F> {
     }
 }
 
-impl<'a, W: Wrap, F: ForbidPattern> RunOwn<'a, W, F> {
+impl<'a, W: Wrap, F: ForbidPattern> RunOwn<'a, W, F>
+where
+    F: Clone + Sync + Send,
+{
     pub fn new_wrap_forbid<R: Rng>(
         output_size: Size,
         global_stats: &'a GlobalStats,
@@ -1278,7 +1285,10 @@ impl<'a, W: Wrap, F: ForbidPattern> RunOwn<'a, W, F> {
     }
 }
 
-impl<'a, W: Wrap, F: ForbidPattern> RunOwn<'a, W, F> {
+impl<'a, W: Wrap, F: ForbidPattern> RunOwn<'a, W, F>
+where
+    F: Clone + Sync + Send,
+{
     fn borrow_mut(&mut self) -> RunBorrow<W, ForbidRef<F>> {
         let core = RunBorrowCore {
             context: &mut self.context,
