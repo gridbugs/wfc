@@ -44,9 +44,11 @@ impl RetryOwn for Forever {
 /// non-deterministic timing between threads. This retry method is not suitable for use cases where
 /// reproducability is important. It outperforms `NumTimes` in cases where the first attempt leads
 /// to contradiction.
+#[cfg(feature = "parallel")]
 #[derive(Debug, Clone, Copy)]
 pub struct ParNumTimes(pub usize);
 
+#[cfg(feature = "parallel")]
 impl RetryOwn for ParNumTimes {
     type Return = Result<Wave, PropagateError>;
     fn retry<'a, W, F, R>(&mut self, run: RunOwn<'a, W, F>, rng: &mut R) -> Self::Return
@@ -180,5 +182,7 @@ mod private {
 
     impl Sealed for Forever {}
     impl Sealed for NumTimes {}
+
+    #[cfg(feature = "parallel")]
     impl Sealed for ParNumTimes {}
 }

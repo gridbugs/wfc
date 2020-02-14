@@ -13,8 +13,10 @@ use wfc::*;
 pub use wrap::WrapXY;
 
 pub mod retry {
+    #[cfg(feature = "parallel")]
+    pub use super::wfc_retry::ParNumTimes;
     pub use super::wfc_retry::RetryOwn as Retry;
-    pub use super::wfc_retry::{Forever, NumTimes, ParNumTimes};
+    pub use super::wfc_retry::{Forever, NumTimes};
 
     pub trait ImageRetry: Retry {
         type ImageReturn;
@@ -174,6 +176,7 @@ impl retry::ImageRetry for retry::NumTimes {
     }
 }
 
+#[cfg(feature = "parallel")]
 impl retry::ImageRetry for retry::ParNumTimes {
     type ImageReturn = Result<DynamicImage, PropagateError>;
     fn image_return(

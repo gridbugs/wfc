@@ -10,6 +10,9 @@ repository = "https://github.com/stevebob/wfc.git"
 documentation = "https://docs.rs/wfc_image"
 edition = "2018"
 
+[features]
+parallel = ["wfc/parallel"]
+
 [dependencies]
 wfc = { path = "../wfc", version = "0.9" }
 image = "0.23"

@@ -40,16 +40,21 @@ fn app() -> Result<(), ()> {
     let pattern_size =
         NonZeroU32::new(pattern_size).expect("pattern size may not be zero");
     let result = if parallel {
-        generate_image_with_rng(
-            &input_image,
-            pattern_size,
-            output_size,
-            orientation,
-            WrapXY,
-            ForbidNothing,
-            retry::ParNumTimes(10),
-            &mut rng,
-        )
+        #[cfg(feature = "parallel")]
+        {
+            generate_image_with_rng(
+                &input_image,
+                pattern_size,
+                output_size,
+                orientation,
+                WrapXY,
+                ForbidNothing,
+                retry::ParNumTimes(10),
+                &mut rng,
+            )
+        }
+        #[cfg(not(feature = "parallel"))]
+        panic!("Recompile with `--features=parallel` to enable parallel retry")
     } else {
         generate_image_with_rng(
             &input_image,
