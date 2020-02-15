@@ -1341,7 +1341,7 @@ where
 
     pub fn collapse_retrying<R, RO>(self, mut retry: RO, rng: &mut R) -> RO::Return
     where
-        R: Rng + Send + Sync + Clone,
+        R: Rng,
         RO: retry::RetryOwn,
     {
         retry.retry(self, rng)

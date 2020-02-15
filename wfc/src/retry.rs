@@ -10,7 +10,7 @@ pub trait RetryOwn: private::Sealed {
     where
         W: Wrap + Clone + Sync + Send,
         F: ForbidPattern + Clone + Sync + Send,
-        R: Rng + Clone + Sync + Send;
+        R: Rng;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -26,7 +26,7 @@ impl RetryOwn for Forever {
     where
         W: Wrap + Clone + Sync + Send,
         F: ForbidPattern + Clone + Sync + Send,
-        R: Rng + Clone + Sync + Send,
+        R: Rng,
     {
         loop {
             match run.collapse(rng) {
@@ -55,7 +55,7 @@ impl RetryOwn for ParNumTimes {
     where
         W: Wrap + Clone + Sync + Send,
         F: ForbidPattern + Clone + Sync + Send,
-        R: Rng + Clone + Sync + Send,
+        R: Rng,
     {
         use rand::SeedableRng;
         use rand_xorshift::XorShiftRng;
@@ -97,7 +97,7 @@ impl RetryOwn for NumTimes {
     where
         W: Wrap + Clone + Sync + Send,
         F: ForbidPattern + Clone + Sync + Send,
-        R: Rng + Clone + Sync + Send,
+        R: Rng,
     {
         loop {
             match run.collapse(rng) {
