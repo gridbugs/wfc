@@ -1,7 +1,6 @@
 # Wave Function Collapse
 
 [![Travis-CI Status](https://travis-ci.org/stevebob/wfc.svg?branch=master)](https://travis-ci.org/stevebob/wfc)
-[![dependency status](https://deps.rs/repo/github/stevebob/wfc/status.svg)](https://deps.rs/repo/github/stevebob/wfc)
 
 Collection of rust libraries implementing the "Wave Function Collapse"
 procedural generation algorithm.
