@@ -4,9 +4,8 @@ use std::num::NonZeroU32;
 use wfc_image::*;
 
 fn app() -> Result<(), ()> {
-    use simon::*;
     let (
-        seed,
+        seed_opt,
         input_path,
         output_path,
         all_orientations,
@@ -14,19 +13,19 @@ fn app() -> Result<(), ()> {
         width,
         height,
         parallel,
-    ): (u64, String, String, bool, u32, u32, u32, bool) = args_all! {
-        opt("s", "seed", "rng seed", "INT")
-            .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen())),
-        opt("i", "input", "input path", "PATH").required(),
-        opt("o", "output", "output path", "PATH").required(),
-        flag("a", "all-orientations", "all orientations"),
-        opt::<u32>("p", "pattern-size", "size of patterns in pixels", "INT").with_default(3),
-        opt::<u32>("x", "width", "width", "INT").with_default(48),
-        opt::<u32>("y", "height", "height", "INT").with_default(48),
-        flag("", "parallel", "run multiple attempts in parallel"),
+    ) = meap::all! {
+        opt_opt("INT", 's').name("seed").desc("rng seed"),
+        opt_req::<String, _>("PATH", 'i').name("input").desc("input path"),
+        opt_req::<String, _>("PATH", 'o').name("output").desc("output path"),
+        flag('a').name("all-orientations").desc("all orientations"),
+        opt_opt::<u32, _>("INT", 'p').name("pattern-size").desc("size of patterns in pixels").with_default(3),
+        opt_opt::<u32, _>("INT", 'x').name("width").desc("width").with_default(48),
+        opt_opt::<u32, _>("INT", 'y').name("height").desc("height").with_default(48),
+        flag("parallel").desc("run multiple attempts in parallel"),
     }
     .with_help_default()
     .parse_env_or_exit();
+    let seed = seed_opt.unwrap_or_else(|| rand::thread_rng().gen());
     println!("seed: {}", seed);
     let orientation: &[Orientation] = if all_orientations {
         &orientation::ALL

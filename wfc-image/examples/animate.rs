@@ -1,5 +1,5 @@
+use animation_helper::WindowPixels;
 use coord_2d::Coord;
-use pixel_grid::{Window, WindowSpec};
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use std::num::NonZeroU32;
@@ -39,9 +39,8 @@ impl ForbidPattern for Forbid {
 }
 
 fn main() {
-    use simon::*;
     let (
-        seed,
+        seed_opt,
         input_path,
         forever,
         anchor_top,
@@ -51,21 +50,21 @@ fn main() {
         delay,
         pattern_size,
         all_orientations,
-    ) = args_all! {
-        opt("s", "seed", "rng seed", "INT")
-            .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen())),
-        opt::<String>("i", "input", "input path", "PATH").required(),
-        flag("f", "forever", "repeat forever"),
-        flag("t", "anchor-top", "anchor top"),
-        flag("b", "anchor-bottom", "anchor bottom"),
-        opt::<u32>("x", "width", "width", "INT").with_default(48),
-        opt::<u32>("y", "height", "height", "INT").with_default(48),
-        opt::<u64>("d", "delay", "delay between steps", "MS"),
-        opt::<u32>("p", "pattern-size", "size of patterns in pixels", "INT").with_default(3),
-        flag("a", "all-orientations", "all orientations"),
+    ) = meap::all! {
+        opt_opt("INT", 's').name("seed").desc("rng seed"),
+        opt_req::<String, _>("PATH", 'i').name("input").desc("input path"),
+        flag('f').name("forever").desc("repeat forever"),
+        flag('t').name("anchor-top").desc("anchor top"),
+        flag('b').name("anchor-bottom").desc("anchor bottom"),
+        opt_opt::<u32, _>("INT", 'x').name("width").desc("width").with_default(48),
+        opt_opt::<u32, _>("INT", 'y').name("height").desc("height").with_default(48),
+        opt_opt::<u64, _>("MS", 'd').name("delay").desc("delay between steps"),
+        opt_opt::<u32, _>("INT", 'p').name("pattern-size").desc("size of patterns in pixels").with_default(3),
+        flag('a').name("all-orientations").desc("all orientations"),
     }
     .with_help_default()
     .parse_env_or_exit();
+    let seed = seed_opt.unwrap_or_else(|| rand::thread_rng().gen());
     if (anchor_top || anchor_bottom) && all_orientations {
         eprintln!("Can't anchor with all orientations");
         ::std::process::exit(1);
@@ -77,7 +76,9 @@ fn main() {
         &[Orientation::Original]
     };
     let image = image::open(input_path).unwrap();
-    let output_size = Size::new(width, height);
+    let grid_size = Size::new(width, height);
+    let pixel_size = Size::new(8, 8);
+    let mut window_pixels = WindowPixels::new(grid_size, pixel_size);
     let mut image_patterns = ImagePatterns::new(
         &image,
         NonZeroU32::new(pattern_size).expect("pattern size may not be zero"),
@@ -102,14 +103,8 @@ fn main() {
         None
     };
     let mut rng = XorShiftRng::seed_from_u64(seed);
-    let window_spec = WindowSpec {
-        title: "animate".to_string(),
-        grid_size: output_size,
-        cell_size: Size::new(8, 8),
-    };
-    let mut window = Window::new(window_spec);
     let global_stats = image_patterns.global_stats();
-    let mut wave = Wave::new(output_size);
+    let mut wave = Wave::new(grid_size);
     let mut context = Context::new();
     let delay = delay.map(Duration::from_millis);
     'generate: loop {
@@ -126,20 +121,9 @@ fn main() {
             &mut rng,
         );
         'inner: loop {
-            window.with_pixel_grid(|mut pixel_grid| {
-                run.wave_cell_ref_iter()
-                    .zip(pixel_grid.iter_mut())
-                    .for_each(|(cell, mut pixel)| {
-                        let colour = image_patterns.weighted_average_colour(&cell);
-                        pixel.set_colour_array_rgba_u8(colour.0);
-                    });
-            });
-            window.draw();
+            window_pixels.draw(run.wave_cell_ref_iter(), &image_patterns);
             if let Some(delay) = delay {
                 thread::sleep(delay);
-            }
-            if window.is_closed() {
-                return;
             }
             match run.step(&mut rng) {
                 Ok(observe) => match observe {

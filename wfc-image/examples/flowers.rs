@@ -1,5 +1,5 @@
+use animation_helper::WindowPixels;
 use coord_2d::{Coord, Size};
-use pixel_grid::{Window, WindowSpec};
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use std::num::NonZeroU32;
@@ -33,32 +33,27 @@ impl ForbidPattern for Forbid {
 }
 
 fn main() {
-    use simon::*;
-    let (seed, output_path, animate): (u64, Option<String>, bool) = args_all! {
-        opt("s", "seed", "rng seed", "INT")
-            .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen())),
-        opt("o", "output", "output path", "PATH"),
-        flag("a", "animate", "animate"),
+    let (seed_opt, output_path, animate) = meap::all! {
+        opt_opt("INT", 's').name("seed").desc("rng seed"),
+        opt_opt::<String, _>("PATH", 'o').name("output").desc("output path"),
+        flag('a').name("animate"),
     }
     .with_help_default()
     .parse_env_or_exit();
+    let seed = seed_opt.unwrap_or_else(|| rand::thread_rng().gen());
     println!("seed: {}", seed);
+    let grid_size = Size::new(48, 48);
+    let pixel_size = Size::new(8, 8);
+    let mut window_pixels = if animate {
+        Some(WindowPixels::new(grid_size, pixel_size))
+    } else {
+        None
+    };
     let mut rng = XorShiftRng::seed_from_u64(seed);
     let image = image::load_from_memory(include_bytes!("flowers.png")).unwrap();
     let pattern_size = NonZeroU32::new(3).unwrap();
     let mut image_patterns =
         ImagePatterns::new(&image, pattern_size, &[Orientation::Original]);
-    let output_size = Size::new(48, 48);
-    let window_spec = WindowSpec {
-        title: "flowers".to_string(),
-        grid_size: output_size,
-        cell_size: Size::new(8, 8),
-    };
-    let mut window = if animate {
-        Some(Window::new(window_spec))
-    } else {
-        None
-    };
     let start_time = ::std::time::Instant::now();
     let id_grid = image_patterns.id_grid_original_orientation();
     let bottom_left_corner_coord =
@@ -71,12 +66,12 @@ fn main() {
         .clear_count();
     let wave = {
         let global_stats = image_patterns.global_stats();
-        let mut wave = Wave::new(output_size);
+        let mut wave = Wave::new(grid_size);
         'generate: loop {
             let mut context = Context::new();
             let sprout_coord = Coord::new(
-                (rng.gen::<u32>() % output_size.width()) as i32,
-                output_size.height() as i32 - 2,
+                (rng.gen::<u32>() % grid_size.width()) as i32,
+                grid_size.height() as i32 - 2,
             );
             let forbid = Forbid {
                 bottom_left_corner_id,
@@ -94,20 +89,8 @@ fn main() {
             'inner: loop {
                 match run.step(&mut rng) {
                     Ok(observe) => {
-                        if let Some(window) = window.as_mut() {
-                            window.with_pixel_grid(|mut pixel_grid| {
-                                run.wave_cell_ref_iter()
-                                    .zip(pixel_grid.iter_mut())
-                                    .for_each(|(cell, mut pixel)| {
-                                        let colour =
-                                            image_patterns.weighted_average_colour(&cell);
-                                        pixel.set_colour_array_rgba_u8(colour.0);
-                                    });
-                            });
-                            window.draw();
-                            if window.is_closed() {
-                                return;
-                            }
+                        if let Some(window_pixels) = window_pixels.as_mut() {
+                            window_pixels.draw(run.wave_cell_ref_iter(), &image_patterns);
                         }
                         match observe {
                             Observe::Complete => break 'generate,

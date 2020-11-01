@@ -3,6 +3,7 @@
 members = [
     "wfc",
     "wfc-image",
+    "animation-helper",
 ]
 
 [profile.release]

@@ -1,6 +1,6 @@
+use meap::Parser;
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
-use simon::*;
 use std::collections::HashSet;
 use std::num::NonZeroU32;
 use wfc::retry::*;
@@ -19,24 +19,23 @@ struct Args {
 }
 
 impl Args {
-    fn arg() -> impl Arg<Item = Self> {
-        args_map! {
+    fn parser() -> impl Parser<Item = Self> {
+        meap::let_map! {
             let {
-                width = opt("x", "width", "output width", "INT").with_default(48);
-                height = opt("y", "height", "output height", "INT").with_default(48);
-                pattern_size = opt("p", "pattern-size", "pattern size", "INT").with_default(3);
-                seed = opt("s", "seed", "rng seed", "INT")
-                    .map(|seed| seed.unwrap_or_else(|| rand::thread_rng().gen()));
-                input_path = opt::<String>("i", "input-path", "input path", "PATH").required();
-                output_path = opt("o", "output-path", "output path", "PATH").required();
-                all_orientations = flag("a", "all-orientations", "include all orientations");
-                retries = opt("r", "retries", "number of retries", "INT").with_default(10);
-                allow_corner = flag("c", "allow-corner", "allow bottom right corner");
+                width = opt_opt("INT", 'x').name("width").desc("output width").with_default(48);
+                height = opt_opt("INT", 'y').name("height").desc("output height").with_default(48);
+                pattern_size = opt_opt("INT", 'p').name("pattern-size").desc("pattern size").with_default(3);
+                seed_opt = opt_opt("INT", 's').name("seed").desc("rng seed");
+                input_path = opt_req::<String, _>("PATH", 'i').name("input-path").desc("input path");
+                output_path = opt_req::<String, _>("PATH", 'o').name("output-path").desc("output path");
+                all_orientations = flag('a').name("all-orientations").desc("include all orientations");
+                retries = opt_opt("INT", 'r').name("retries").desc("number of retries").with_default(10);
+                allow_corner = flag('c').name("allow-corner").desc("allow bottom right corner");
             } in {
                 Self {
                     output_size: Size::new(width, height),
                     pattern_size,
-                    seed,
+                    seed: seed_opt.unwrap_or_else(|| rand::thread_rng().gen()),
                     input_image: image::open(input_path).unwrap(),
                     output_path,
                     orientations: if all_orientations {
@@ -134,7 +133,7 @@ fn app(args: Args) -> Result<(), ()> {
 }
 
 fn main() {
-    let args = Args::arg().with_help_default().parse_env_or_exit();
+    let args = Args::parser().with_help_default().parse_env_or_exit();
     ::std::process::exit(match app(args) {
         Ok(()) => 0,
         Err(()) => 1,

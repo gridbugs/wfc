@@ -22,8 +22,8 @@ rand = "0.7"
 
 [dev-dependencies]
 rand_xorshift = "0.2"
-simon = "0.4"
-pixel_grid = "0.5"
+meap = "0.4"
+animation_helper = { path = "../animation-helper" }
 
 [[example]]
 name = "simple"
