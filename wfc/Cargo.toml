@@ -15,7 +15,7 @@ parallel = ["rayon", "rand_xorshift"]
 
 [dependencies]
 rand = "0.7"
-hashbrown = "0.7"
+hashbrown = "0.9"
 coord_2d = "0.2"
 grid_2d = "0.14"
 direction = "0.17"
