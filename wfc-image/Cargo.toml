@@ -21,7 +21,7 @@ grid_2d = "0.14"
 rand = "0.7"
 
 [dev-dependencies]
-rand_xorshift = "0.2"
+rand_xorshift = "0.3"
 meap = "0.4"
 animation_helper = { path = "../animation-helper" }
 
