@@ -14,7 +14,7 @@ edition = "2018"
 parallel = ["rayon", "rand_xorshift"]
 
 [dependencies]
-rand = "0.7"
+rand = "0.8"
 hashbrown = "0.9"
 coord_2d = "0.2"
 grid_2d = "0.14"
