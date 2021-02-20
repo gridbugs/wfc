@@ -13,6 +13,6 @@ jobs:
         rust-version: ${{ matrix.rust }}
     - uses: actions/checkout@master
     - run: |
-      cargo test
-      cargo test --manifest-path=wfc/Cargo.toml --features=parallel
-      cargo test --manifest-path=wfc-image/Cargo.toml --features=parallel
+        cargo test
+        cargo test --manifest-path=wfc/Cargo.toml --features=parallel
+        cargo test --manifest-path=wfc-image/Cargo.toml --features=parallel
