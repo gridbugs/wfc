@@ -1,5 +1,7 @@
 # Wave Function Collapse
 
+[![test](https://github.com/stevebob/wfc/actions/workflows/test.yml/badge.svg)](https://github.com/stevebob/wfc/actions/workflows/test.yml)
+
 Collection of rust libraries implementing the "Wave Function Collapse"
 procedural generation algorithm.
  - [wfc](https://github.com/stevebob/wfc/tree/master/wfc): low level crate implementing wfc on arbitrary grids
