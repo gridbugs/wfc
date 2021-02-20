@@ -1,9 +1,0 @@
-language: rust
-cache: cargo
-matrix:
-  include:
-    - rust: stable
-      script:
-        - cargo test
-        - cargo test --manifest-path=wfc/Cargo.toml --features=parallel
-        - cargo test --manifest-path=wfc-image/Cargo.toml --features=parallel
