@@ -473,7 +473,7 @@ impl WaveCell {
             self.stats.sum_compatible_pattern_weight
         );
 
-        let mut remaining = rng.gen_range(0, self.stats.sum_compatible_pattern_weight);
+        let mut remaining = rng.gen_range(0..self.stats.sum_compatible_pattern_weight);
         for (pattern_id, pattern_stats) in
             self.weighted_compatible_stats_enumerate(global_stats)
         {

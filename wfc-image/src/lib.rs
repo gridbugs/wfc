@@ -39,7 +39,7 @@ impl ImagePatterns {
         pattern_size: NonZeroU32,
         orientations: &[Orientation],
     ) -> Self {
-        let rgba_image = image.to_rgba();
+        let rgba_image = image.to_rgba8();
         let size = Size::new(rgba_image.width(), rgba_image.height());
         let grid = Grid::new_fn(size, |Coord { x, y }| {
             *rgba_image.get_pixel(x as u32, y as u32)
