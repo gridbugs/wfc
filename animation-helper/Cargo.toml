@@ -9,4 +9,4 @@ wfc = { path = "../wfc" }
 wfc_image = { path = "../wfc-image" }
 coord_2d = "0.3"
 pixels = "0.2"
-winit = "0.23"
+winit = "0.25"
