@@ -79,6 +79,7 @@ impl<T> IndexMut<PatternId> for PatternTable<T> {
     }
 }
 
+#[derive(Clone)]
 pub struct PatternWeight {
     weight: NonZeroU32,
     weight_log_weight: f32,
@@ -99,6 +100,7 @@ impl PatternWeight {
     }
 }
 
+#[derive(Clone)]
 pub struct GlobalStats {
     pattern_weights: PatternTable<Option<PatternWeight>>,
     compatibility_per_pattern: PatternTable<CardinalDirectionTable<Vec<PatternId>>>,
@@ -1289,7 +1291,7 @@ impl<'a, W: Wrap, F: ForbidPattern> RunOwn<'a, W, F>
 where
     F: Clone + Sync + Send,
 {
-    fn borrow_mut(&mut self) -> RunBorrow<W, ForbidRef<F>> {
+    pub fn borrow_mut(&mut self) -> RunBorrow<W, ForbidRef<F>> {
         let core = RunBorrowCore {
             context: &mut self.context,
             wave: &mut self.wave,
@@ -1343,6 +1345,141 @@ where
     where
         R: Rng,
         RO: retry::RetryOwn,
+    {
+        retry.retry(self, rng)
+    }
+}
+
+#[derive(Clone)]
+/// Represents a running instance of wfc which allocates and owns its resources including a copy
+/// of the GlobalStats
+pub struct RunOwnAll<W: Wrap = WrapXY, F: ForbidPattern = ForbidNothing> {
+    context: Context,
+    wave: Wave,
+    global_stats: GlobalStats,
+    output_wrap: PhantomData<W>,
+    forbid: F,
+}
+
+impl RunOwnAll {
+    pub fn new<R: Rng>(
+        output_size: Size,
+        global_stats: GlobalStats,
+        rng: &mut R,
+    ) -> Self {
+        Self::new_wrap_forbid(output_size, global_stats, WrapXY, ForbidNothing, rng)
+    }
+}
+
+impl<W: Wrap> RunOwnAll<W> {
+    pub fn new_wrap<R: Rng>(
+        output_size: Size,
+        global_stats: GlobalStats,
+        wrap: W,
+        rng: &mut R,
+    ) -> Self {
+        Self::new_wrap_forbid(output_size, global_stats, wrap, ForbidNothing, rng)
+    }
+}
+
+impl<F: ForbidPattern> RunOwnAll<WrapXY, F>
+where
+    F: Clone + Sync + Send,
+{
+    pub fn new_forbid<R: Rng>(
+        output_size: Size,
+        global_stats: GlobalStats,
+        forbid: F,
+        rng: &mut R,
+    ) -> Self {
+        Self::new_wrap_forbid(output_size, global_stats, WrapXY, forbid, rng)
+    }
+}
+
+impl<W: Wrap, F: ForbidPattern> RunOwnAll<W, F>
+where
+    F: Clone + Sync + Send,
+{
+    pub fn new_wrap_forbid<R: Rng>(
+        output_size: Size,
+        global_stats: GlobalStats,
+        wrap: W,
+        forbid: F,
+        rng: &mut R,
+    ) -> Self {
+        let _ = wrap;
+        let wave = Wave::new(output_size);
+        let context = Context::new();
+        let mut s = Self {
+            context,
+            wave,
+            global_stats,
+            output_wrap: PhantomData,
+            forbid,
+        };
+        s.borrow_mut().reset(rng);
+        s
+    }
+}
+
+impl<W: Wrap, F: ForbidPattern> RunOwnAll<W, F>
+where
+    F: Clone + Sync + Send,
+{
+    pub fn borrow_mut(&mut self) -> RunBorrow<W, ForbidRef<F>> {
+        let core = RunBorrowCore {
+            context: &mut self.context,
+            wave: &mut self.wave,
+            global_stats: &self.global_stats,
+            output_wrap: self.output_wrap,
+        };
+        RunBorrow {
+            core,
+            forbid: ForbidRef(&mut self.forbid),
+        }
+    }
+
+    pub fn step<R: Rng>(&mut self, rng: &mut R) -> Result<Observe, PropagateError> {
+        self.borrow_mut().step(rng)
+    }
+
+    pub fn collapse<R: Rng>(&mut self, rng: &mut R) -> Result<(), PropagateError> {
+        self.borrow_mut().collapse(rng)
+    }
+
+    pub fn wave_cell_ref(&self, coord: Coord) -> WaveCellRef {
+        let wave_cell = self.wave.grid.get_checked(coord);
+        WaveCellRef {
+            wave_cell,
+            global_stats: &self.global_stats,
+        }
+    }
+
+    pub fn wave_cell_ref_iter(&self) -> impl Iterator<Item = WaveCellRef> {
+        self.wave.grid.iter().map(move |wave_cell| WaveCellRef {
+            wave_cell,
+            global_stats: &self.global_stats,
+        })
+    }
+
+    pub fn wave_cell_ref_enumerate(&self) -> impl Iterator<Item = (Coord, WaveCellRef)> {
+        self.wave.grid.enumerate().map(move |(coord, wave_cell)| {
+            let wave_cell_ref = WaveCellRef {
+                wave_cell,
+                global_stats: &self.global_stats,
+            };
+            (coord, wave_cell_ref)
+        })
+    }
+
+    pub fn into_wave(self) -> Wave {
+        self.wave
+    }
+
+    pub fn collapse_retrying<R, RO>(self, mut retry: RO, rng: &mut R) -> RO::Return
+    where
+        R: Rng,
+        RO: retry::RetryOwnAll,
     {
         retry.retry(self, rng)
     }

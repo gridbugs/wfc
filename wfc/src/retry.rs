@@ -1,5 +1,5 @@
 use crate::{
-    wfc::{ForbidPattern, PropagateError, RunBorrow, RunOwn, Wave},
+    wfc::{ForbidPattern, PropagateError, RunBorrow, RunOwn, RunOwnAll, Wave},
     wrap::Wrap,
 };
 use rand::Rng;
@@ -111,6 +111,90 @@ impl RetryOwn for NumTimes {
                 }
             }
         }
+    }
+}
+
+pub trait RetryOwnAll: private::Sealed {
+    type Return;
+    fn retry<W, F, R>(&mut self, run: RunOwnAll<W, F>, rng: &mut R) -> Self::Return
+    where
+        W: Wrap + Clone + Sync + Send,
+        F: ForbidPattern + Clone + Sync + Send,
+        R: Rng;
+}
+
+impl RetryOwnAll for Forever {
+    type Return = Wave;
+    fn retry<W, F, R>(&mut self, mut run: RunOwnAll<W, F>, rng: &mut R) -> Self::Return
+    where
+        W: Wrap + Clone + Sync + Send,
+        F: ForbidPattern + Clone + Sync + Send,
+        R: Rng,
+    {
+        loop {
+            match run.collapse(rng) {
+                Ok(()) => (),
+                Err(PropagateError::Contradiction) => continue,
+            }
+            return run.into_wave();
+        }
+    }
+}
+
+impl RetryOwnAll for NumTimes {
+    type Return = Result<Wave, PropagateError>;
+    fn retry<W, F, R>(&mut self, mut run: RunOwnAll<W, F>, rng: &mut R) -> Self::Return
+    where
+        W: Wrap + Clone + Sync + Send,
+        F: ForbidPattern + Clone + Sync + Send,
+        R: Rng,
+    {
+        loop {
+            match run.collapse(rng) {
+                Ok(()) => return Ok(run.into_wave()),
+                Err(e) => {
+                    if self.0 == 0 {
+                        return Err(e);
+                    } else {
+                        self.0 -= 1;
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl RetryOwnAll for ParNumTimes {
+    type Return = Result<Wave, PropagateError>;
+    fn retry<W, F, R>(&mut self, run: RunOwnAll<W, F>, rng: &mut R) -> Self::Return
+    where
+        W: Wrap + Clone + Sync + Send,
+        F: ForbidPattern + Clone + Sync + Send,
+        R: Rng,
+    {
+        use rand::SeedableRng;
+        use rand_xorshift::XorShiftRng;
+        use rayon::prelude::*;
+        // Each thread runs with a different rng so they can produce different results.  The
+        // `RetryOwn` trait doesn't provide a way to produce new rngs of type `R` besides `clone`,
+        // which won't help since we want each rng to be different.  Instead, each thread runs with
+        // a `XorShiftRng` seeded with a random number taken from the original rng. `XorShiftRng`
+        // is chosen because it is fast, and a cryptographically secure rng (which it is not) is
+        // not required for this purpose. It does mean that the rng used by this runner can't be
+        // chosen by the caller, but the only way to allow this is to change the `RetryOwn`
+        // interface which doesn't seem worth it.
+        let rngs = (0..self.0)
+            .map(|_| XorShiftRng::seed_from_u64(rng.gen()))
+            .collect::<Vec<_>>();
+        rngs.into_par_iter()
+            .filter_map(|mut rng| {
+                let mut runner = run.clone();
+                let collapse_result = runner.collapse(&mut rng);
+                collapse_result.map(|_| runner.into_wave()).ok()
+            })
+            .find_any(|_| true)
+            .ok_or(PropagateError::Contradiction)
     }
 }
 
