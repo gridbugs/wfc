@@ -3,8 +3,8 @@ use wfc::WaveCellRef;
 use wfc_image::ImagePatterns;
 
 pub struct WindowPixels {
-    window: winit::window::Window,
-    pixels: pixels::Pixels<winit::window::Window>,
+    _window: winit::window::Window,
+    pixels: pixels::Pixels,
 }
 
 impl WindowPixels {
@@ -30,7 +30,10 @@ impl WindowPixels {
         let pixels =
             pixels::Pixels::new(grid_size.width(), grid_size.height(), surface_texture)
                 .unwrap();
-        Self { window, pixels }
+        Self {
+            _window: window,
+            pixels,
+        }
     }
 
     pub fn draw<'a>(
@@ -47,6 +50,5 @@ impl WindowPixels {
             pixel[3] = a;
         }
         let _ = self.pixels.render();
-        self.window.request_redraw();
     }
 }

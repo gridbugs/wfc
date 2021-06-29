@@ -61,6 +61,11 @@ from a specified image file.
 ->
 ![cat Animation](/images/cat-animate.gif)
 
+```bash
+cargo run --release --example=animate -- -i examples/cat.png -x100 -y60 -p3 --forever
+cargo run --release --example=animate -- -i examples/flowers.png -x100 -y60 -p3 --all-orientations --forever
+```
+
 ### Anchor
 
 Takes the tile in the bottom-right corner and forces it to appear along the entire
