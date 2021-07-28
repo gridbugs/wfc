@@ -5,8 +5,8 @@ version = "0.11.1"
 authors = ["Stephen Sherratt <stephen@sherra.tt>"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/stevebob/wfc.git"
-repository = "https://github.com/stevebob/wfc.git"
+homepage = "https://github.com/gridbugs/wfc.git"
+repository = "https://github.com/gridbugs/wfc.git"
 documentation = "https://docs.rs/wfc_image"
 edition = "2018"
 

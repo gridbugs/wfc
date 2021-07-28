@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/crates/v/wfc_image.svg)](https://crates.io/crates/wfc_image)
 [![Documentation](https://docs.rs/wfc_image/badge.svg)](https://docs.rs/wfc_image)
 
-A helper for [wfc](https://github.com/stevebob/wfc/tree/master/wfc) to simplify generating
+A helper for [wfc](https://github.com/gridbugs/wfc/tree/master/wfc) to simplify generating
 images based on image files, using the [image](https://crates.io/crates/image) crate.
 
 ## Examples
