@@ -22,7 +22,7 @@ rand = "0.8"
 
 [dev-dependencies]
 rand_xorshift = "0.3"
-meap = "0.4"
+meap = "0.5"
 animation_helper = { path = "../animation-helper" }
 
 [[example]]
