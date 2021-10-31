@@ -1,5 +1,7 @@
 [workspace]
 
+resolver = "2" # this is required to render examples with wgpu
+
 members = [
     "wfc",
     "wfc-image",
