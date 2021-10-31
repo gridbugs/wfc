@@ -1,10 +1,7 @@
 # Nix shell with rust compiler and dependencies for libraries and examples
 
 let
-  # This overlay is mozilla/nixpkgs-mozilla with the patch applied from this PR:
-  # https://github.com/mozilla/nixpkgs-mozilla/pull/250
-  # ...which replaces deprecated usage of stdenv.lib with lib.
-  moz_overlay_url = "https://github.com/gridbugs/nixpkgs-mozilla/archive/with-stdenv.lib-fix.tar.gz";
+  moz_overlay_url = "https://github.com/mozilla/nixpkgs-mozilla/archive/master.tar.gz";
   moz_overlay = import (builtins.fetchTarball moz_overlay_url);
   nixpkgs = import <nixpkgs> {
     overlays = [ moz_overlay ];
@@ -18,6 +15,15 @@ stdenv.mkDerivation rec {
   name = "moz_overlay_shell";
   buildInputs = [
     ruststable
+
+    # Needed for graphical examples
+    xorg.libX11
+    xorg.libXcursor
+    xorg.libXrandr
+    xorg.libXi
+    vulkan-loader
+    vulkan-tools
+    libGL
   ];
 
   # Enable backtraces on panics
