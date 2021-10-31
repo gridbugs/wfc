@@ -31,7 +31,7 @@ is populated with values, or all the candidates are removed from a cell.
 ![Flowers Output1](/images/flowers-output1.png)
 ![Flowers Output2](/images/flowers-output2.png)
 
-For more image examples, see [wfc-image](https://github.com/gridbugs/wfc/tree/master/wfc-image).
+For more image examples, see [wfc-image](https://github.com/gridbugs/wfc/tree/main/wfc-image).
 
 ## Animation
 
