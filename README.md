@@ -1,6 +1,7 @@
 # Wave Function Collapse
 
 [![test](https://github.com/gridbugs/wfc/actions/workflows/test.yml/badge.svg)](https://github.com/gridbugs/wfc/actions/workflows/test.yml)
+[![dependency status](https://deps.rs/repo/github/gridbugs/wfc/status.svg)](https://deps.rs/repo/github/gridbugs/wfc)
 
 Collection of rust libraries implementing the "Wave Function Collapse"
 procedural generation algorithm.
