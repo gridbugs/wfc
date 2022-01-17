@@ -16,7 +16,7 @@ js = ["getrandom/js"]
 
 [dependencies]
 rand = "0.8"
-hashbrown = "0.11"
+hashbrown = "0.12"
 coord_2d = "0.3"
 grid_2d = "0.15"
 direction = "0.18"
