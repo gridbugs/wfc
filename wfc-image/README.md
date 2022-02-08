@@ -62,8 +62,8 @@ from a specified image file.
 ![cat Animation](/images/cat-animate.gif)
 
 ```bash
-cargo run --release --example=animate -- -i examples/cat.png -x100 -y60 -p3 --forever
-cargo run --release --example=animate -- -i examples/flowers.png -x100 -y60 -p3 --all-orientations --forever
+cargo run --release --example=animate -- -i images/cat.png -x100 -y60 -p3 --forever
+cargo run --release --example=animate -- -i images/flowers.png -x100 -y60 -p3 --all-orientations --forever
 ```
 
 ### Anchor
