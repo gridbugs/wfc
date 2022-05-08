@@ -1,21 +1,21 @@
 [package]
 name = "wfc_image"
 description = "Create patterns for wfc using image files"
-version = "0.11.2"
+version = "0.12.0"
 authors = ["Stephen Sherratt <stephen@sherra.tt>"]
 license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/gridbugs/wfc.git"
 repository = "https://github.com/gridbugs/wfc.git"
 documentation = "https://docs.rs/wfc_image"
-edition = "2018"
+edition = "2021"
 
 [features]
 parallel = ["wfc/parallel"]
 
 [dependencies]
 wfc = { path = "../wfc", version = "0.10" }
-image = { version = "0.23", default-features = false, features = ["png"] }
+image = { version = "0.24", default-features = false, features = ["png"] }
 coord_2d = "0.3"
 grid_2d = "0.15"
 rand = "0.8"

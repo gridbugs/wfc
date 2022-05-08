@@ -2,11 +2,11 @@
 name = "animation_helper"
 version = "0.1.0"
 authors = ["Stephen Sherratt <stephen@sherra.tt>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 wfc = { path = "../wfc" }
 wfc_image = { path = "../wfc-image" }
 coord_2d = "0.3"
-pixels = "0.7"
-winit = "0.25"
+pixels = "0.9"
+winit = "0.26"
