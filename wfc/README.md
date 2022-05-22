@@ -40,3 +40,12 @@ The colour of each pixel is the average of all colours which could be assigned t
 weighted by probability.
 
 ![Flowers Animation](/images/flowers-animate.gif)
+
+## Related Work
+
+- [Maxim Gumin's WaveFunctionCollapse](https://github.com/mxgmn/WaveFunctionCollapse) is where
+  I first learnt about the WFC algorithm. It contains a reference implementation and collects
+  links to many other WFC resources and implementations (including this one).
+- WFC is heavily based on [Paul Merrell's Model Synthesis algorithm](https://paulmerrell.org/model-synthesis/).
+- I found [Fehr Mathieu's fast-wfc](https://github.com/math-fehr/fast-wfc) to be a very understandable
+  implementation of WFC. It answered many of my questions about specific details of the algorithm.
