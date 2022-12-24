@@ -41,7 +41,7 @@ impl WindowPixels {
         cells: impl Iterator<Item = WaveCellRef<'a>>,
         image_patterns: &ImagePatterns,
     ) {
-        let frame = self.pixels.get_frame();
+        let frame = self.pixels.get_frame_mut();
         for (cell, pixel) in cells.zip(frame.chunks_exact_mut(4)) {
             let [r, g, b, a] = image_patterns.weighted_average_colour(&cell).0;
             pixel[0] = r;
